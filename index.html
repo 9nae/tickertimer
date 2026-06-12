@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulator เครื่องเคาะสัญญาณเวลา | การเคลื่อนที่แนวตรง</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <button id="togglePanelBtn" class="panel-toggle" type="button" aria-pressed="false">ซ่อนแผง</button>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ฟิสิกส์ ม.4 · การเคลื่อนที่แนวตรง</p>
+        <h1>Simulator เครื่องเคาะสัญญาณเวลา</h1>
+        <p class="subtitle">
+          ทดลองสร้างแถบกระดาษเคาะสัญญาณเวลา วิเคราะห์ระยะทาง เวลา อัตราเร็ว ความเร็ว และความเร่งจากจุดที่เกิดทุก ๆ 1/f วินาที
+        </p>
+      </div>
+      <div class="hero-card">
+        <div class="small-label">ค่ามาตรฐานในห้องเรียน</div>
+        <strong>50 ครั้ง/วินาที</strong>
+        <span>เวลาระหว่างจุดติดกัน = 0.02 s</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls" aria-labelledby="control-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ตั้งค่าการทดลอง</p>
+            <h2 id="control-title">แผงควบคุม</h2>
+          </div>
+          <button id="resetBtn" class="btn ghost" type="button">รีเซ็ต</button>
+        </div>
+
+        <label class="field">
+          <span>รูปแบบการเคลื่อนที่</span>
+          <select id="motionMode">
+            <option value="constant">ความเร็วคงที่</option>
+            <option value="accelerate" selected>ความเร็วเพิ่มขึ้น / มีความเร่ง</option>
+            <option value="decelerate">ความเร็วลดลง / มีความหน่วง</option>
+            <option value="custom">กำหนดเอง</option>
+          </select>
+        </label>
+
+        <div id="customProfile" class="custom-profile" aria-label="custom acceleration profile">
+          <div class="custom-profile-head">
+            <strong>โปรไฟล์กำหนดเอง</strong>
+            <span>ตั้งความเร่งแต่ละช่วงให้เพิ่มขึ้น คงที่ หรือลดลงได้ในรอบเดียว</span>
+          </div>
+          <div class="profile-row">
+            <label>
+              <span>ช่วง 1 สิ้นสุดที่เวลา (s)</span>
+              <input id="customT1" type="number" min="0.1" max="5" step="0.1" value="0.6" />
+            </label>
+            <label>
+              <span><span class="math-text">a₁</span> (cm/s²)</span>
+              <input id="customA1" type="number" min="-160" max="160" step="5" value="60" />
+            </label>
+          </div>
+          <div class="profile-row">
+            <label>
+              <span>ช่วง 2 สิ้นสุดที่เวลา (s)</span>
+              <input id="customT2" type="number" min="0.2" max="5" step="0.1" value="1.1" />
+            </label>
+            <label>
+              <span><span class="math-text">a₂</span> (cm/s²)</span>
+              <input id="customA2" type="number" min="-160" max="160" step="5" value="0" />
+            </label>
+          </div>
+          <div class="profile-row">
+            <label>
+              <span>ช่วง 3 สิ้นสุดที่เวลา (s)</span>
+              <input id="customT3" type="number" min="0.3" max="5" step="0.1" value="1.6" />
+            </label>
+            <label>
+              <span><span class="math-text">a₃</span> (cm/s²)</span>
+              <input id="customA3" type="number" min="-160" max="160" step="5" value="-80" />
+            </label>
+          </div>
+          <div class="profile-row">
+            <div class="profile-end">ช่วง 4 ถึงเวลาสิ้นสุดการทดลอง</div>
+            <label>
+              <span><span class="math-text">a₄</span> (cm/s²)</span>
+              <input id="customA4" type="number" min="-160" max="160" step="5" value="30" />
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>ความเร็วต้น <span class="math-text">v₀ (cm/s)</span></span>
+            <input id="v0" type="range" min="0" max="120" step="1" value="25" />
+            <output id="v0Out">25</output>
+          </label>
+          <label class="field">
+            <span>ความเร่ง <span class="math-text">a (cm/s²)</span></span>
+            <input id="acc" type="range" min="-120" max="120" step="1" value="35" />
+            <output id="accOut">35</output>
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>ความถี่เครื่องเคาะ f (Hz)</span>
+            <input id="freq" type="number" min="10" max="100" step="1" value="50" />
+          </label>
+          <label class="field">
+            <span>เวลาทดลองทั้งหมด (s)</span>
+            <input id="duration" type="number" min="0.4" max="5" step="0.1" value="2.0" />
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>จัดกลุ่มทุกกี่จุด</span>
+            <input id="groupSize" type="number" min="2" max="10" step="1" value="5" />
+          </label>
+          <label class="field">
+            <span>สเกลภาพ (px/cm)</span>
+            <input id="scale" type="number" min="40" max="100" step="1" value="60" />
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="runBtn" class="btn primary" type="button">เริ่มจำลอง</button>
+          <button id="pauseBtn" class="btn" type="button">หยุดชั่วคราว</button>
+          <button id="stepBtn" class="btn" type="button">เดินทีละจุด</button>
+        </div>
+
+        <div class="formula-box">
+          <h3>สูตรที่ใช้ในซิมูเลเตอร์</h3>
+          <div class="formula-row">
+            <span>ตำแหน่ง</span>
+            <math display="block">
+              <mi>s</mi><mo>=</mo><msub><mi>v</mi><mn>0</mn></msub><mi>t</mi><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>a</mi><msup><mi>t</mi><mn>2</mn></msup>
+            </math>
+          </div>
+          <div class="formula-row">
+            <span>ความเร็ว</span>
+            <math display="block">
+              <mi>v</mi><mo>=</mo><msub><mi>v</mi><mn>0</mn></msub><mo>+</mo><mi>a</mi><mi>t</mi>
+            </math>
+          </div>
+          <div class="formula-row">
+            <span>เวลาระหว่างจุด</span>
+            <math display="block">
+              <mi>&Delta;</mi><mi>t</mi><mo>=</mo><mfrac><mn>1</mn><mi>f</mi></mfrac>
+            </math>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel simulator" aria-labelledby="sim-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ทดลองเสมือนจริง</p>
+            <h2 id="sim-title">แถบกระดาษเครื่องเคาะสัญญาณเวลา</h2>
+          </div>
+          <div class="sim-actions">
+            <button id="toggleValuesBtn" class="btn ghost" type="button" aria-pressed="false">ซ่อนค่า</button>
+            <button id="togglePeriodBtn" class="btn ghost" type="button" aria-pressed="false">ซ่อนช่วง</button>
+            <div class="status-pill" id="motionStatus">พร้อมทดลอง</div>
+          </div>
+        </div>
+
+        <div class="lab-scene">
+          <div class="ticker-machine">
+            <div class="machine-top">Ticker Timer</div>
+            <div class="needle" id="needle"></div>
+            <div class="carbon-paper">กระดาษคาร์บอน</div>
+          </div>
+          <div class="cart" id="cart">
+            <div class="cart-body">รถทดลอง</div>
+            <div class="wheel left"></div>
+            <div class="wheel right"></div>
+          </div>
+          <div class="track-line"></div>
+        </div>
+
+        <div class="sim-playbar" aria-label="ควบคุมการจำลอง">
+          <button id="simRunBtn" class="btn primary" type="button">เล่น</button>
+          <button id="simPauseBtn" class="btn" type="button">หยุด</button>
+          <button id="simStepBtn" class="btn" type="button">ทีละจุด</button>
+        </div>
+
+        <div class="tape-wrap">
+          <div class="ruler" id="ruler"></div>
+          <div class="tape" id="tape" role="img" aria-label="แถบกระดาษแสดงจุดจากเครื่องเคาะสัญญาณเวลา"></div>
+        </div>
+
+        <div class="measure-panel">
+          <div>
+            <strong>โหมดวัดระยะ</strong>
+            <p>คลิกจุด 2 จุดบนแถบกระดาษ ระบบจะคำนวณ <span class="math-text">Δs</span>, <span class="math-text">Δt</span> และอัตราเร็วเฉลี่ยให้ทันที</p>
+          </div>
+          <button id="clearMeasureBtn" class="btn ghost" type="button">ล้างจุดที่เลือก</button>
+          <div class="measure-result math-text" id="measureResult">ยังไม่ได้เลือกจุด</div>
+        </div>
+      </section>
+
+      <section class="panel analysis" aria-labelledby="analysis-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">อ่านผลการทดลอง</p>
+            <h2 id="analysis-title">สรุปผลอัตโนมัติ</h2>
+          </div>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span>เวลาระหว่างจุด</span>
+            <strong id="dtSummary">0.020 s</strong>
+          </div>
+          <div class="summary-card">
+            <span>จำนวนจุดทั้งหมด</span>
+            <strong id="dotSummary">101 จุด</strong>
+          </div>
+          <div class="summary-card">
+            <span>ระยะทางรวม</span>
+            <strong id="distanceSummary">120.00 cm</strong>
+          </div>
+          <div class="summary-card">
+            <span>อัตราเร็วเฉลี่ย</span>
+            <strong id="avgSpeedSummary" class="math-text">60.00 cm/s</strong>
+          </div>
+        </div>
+        <div class="interpretation" id="interpretation"></div>
+      </section>
+
+      <section class="panel graph-panel" aria-labelledby="graph-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">กราฟจากข้อมูลจำลอง</p>
+            <h2 id="graph-title">กราฟการเคลื่อนที่</h2>
+          </div>
+          <select id="graphType" aria-label="เลือกกราฟ">
+            <option value="position">กราฟตำแหน่ง - เวลา (s-t)</option>
+            <option value="velocity">กราฟความเร็ว - เวลา (v-t)</option>
+            <option value="acceleration">กราฟความเร่ง - เวลา (a-t)</option>
+          </select>
+        </div>
+        <canvas id="chart" width="900" height="360"></canvas>
+      </section>
+
+      <section class="panel table-panel" aria-labelledby="table-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ตารางวิเคราะห์</p>
+            <h2 id="table-title">ข้อมูลแบบจัดกลุ่มจุด</h2>
+          </div>
+          <button id="downloadCsvBtn" class="btn" type="button">ดาวน์โหลด CSV</button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ช่วง</th>
+                <th>จุดเริ่ม-จุดจบ</th>
+                <th>เวลาเริ่ม (s)</th>
+                <th>เวลาจบ (s)</th>
+                <th>ระยะในช่วง <span class="math-text">Δs (cm)</span></th>
+                <th><span class="math-text">Δt (s)</span></th>
+                <th><span class="math-text">v</span> เฉลี่ยช่วง <span class="math-text">(cm/s)</span></th>
+                <th><span class="math-text">a</span> โดยประมาณ <span class="math-text">(cm/s²)</span></th>
+                <th>ลักษณะจุด</th>
+              </tr>
+            </thead>
+            <tbody id="dataBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel practice" aria-labelledby="practice-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">กิจกรรมในชั้นเรียน</p>
+            <h2 id="practice-title">ใบงานสั้นในซิมูเลเตอร์</h2>
+          </div>
+          <button id="checkAnswersBtn" class="btn primary" type="button">ตรวจคำตอบ</button>
+        </div>
+        <div class="practice-grid">
+          <div class="question-card">
+            <label>
+              1) ถ้าเครื่องเคาะทำงานที่ <span id="qFreq">50</span> Hz เวลาระหว่างจุดติดกันเท่ากับกี่วินาที?
+              <input id="ansDt" type="number" step="0.001" placeholder="ตอบเป็นวินาที" />
+            </label>
+          </div>
+          <div class="question-card">
+            <label>
+              2) จากข้อมูลปัจจุบัน ระยะทางรวมของแถบกระดาษประมาณกี่เซนติเมตร?
+              <input id="ansDistance" type="number" step="0.01" placeholder="ตอบเป็น cm" />
+            </label>
+          </div>
+          <div class="question-card">
+            <label>
+              3) เมื่อตำแหน่งจุดห่างมากขึ้นเรื่อย ๆ แปลว่าวัตถุเคลื่อนที่แบบใด?
+              <select id="ansType">
+                <option value="">เลือกคำตอบ</option>
+                <option value="accelerate">มีความเร่ง / เร็วขึ้น</option>
+                <option value="constant">ความเร็วคงที่</option>
+                <option value="decelerate">มีความหน่วง / ช้าลง</option>
+                <option value="mixed">มีทั้งเร่งขึ้นและลดลง</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="answerFeedback" class="feedback">กรอกคำตอบแล้วกด “ตรวจคำตอบ”</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
