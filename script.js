@@ -1,834 +1,1144 @@
+const FREQUENCY = 50;
+const PERIOD = 1 / FREQUENCY;
+const MAX_MANUAL_PERIODS = 250;
+const MIN_TAPE_SCALE = 32;
+const FIT_TO_VIEW_DOMAIN = 20;
+
 const els = {
-  motionMode: document.getElementById('motionMode'),
-  v0: document.getElementById('v0'),
-  acc: document.getElementById('acc'),
-  v0Out: document.getElementById('v0Out'),
-  accOut: document.getElementById('accOut'),
-  customProfile: document.getElementById('customProfile'),
-  customT1: document.getElementById('customT1'),
-  customT2: document.getElementById('customT2'),
-  customT3: document.getElementById('customT3'),
-  customA1: document.getElementById('customA1'),
-  customA2: document.getElementById('customA2'),
-  customA3: document.getElementById('customA3'),
-  customA4: document.getElementById('customA4'),
-  freq: document.getElementById('freq'),
-  duration: document.getElementById('duration'),
-  groupSize: document.getElementById('groupSize'),
-  scale: document.getElementById('scale'),
-  runBtn: document.getElementById('runBtn'),
+  labStage: document.getElementById('labStage'),
+  cart: document.getElementById('cart'),
+  striker: document.getElementById('striker'),
+  paperTail: document.getElementById('paperTail'),
+  motionStatus: document.getElementById('motionStatus'),
+  playBtn: document.getElementById('playBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   stepBtn: document.getElementById('stepBtn'),
-  simRunBtn: document.getElementById('simRunBtn'),
-  simPauseBtn: document.getElementById('simPauseBtn'),
-  simStepBtn: document.getElementById('simStepBtn'),
   resetBtn: document.getElementById('resetBtn'),
-  togglePanelBtn: document.getElementById('togglePanelBtn'),
-  toggleValuesBtn: document.getElementById('toggleValuesBtn'),
-  togglePeriodBtn: document.getElementById('togglePeriodBtn'),
-  clearMeasureBtn: document.getElementById('clearMeasureBtn'),
-  downloadCsvBtn: document.getElementById('downloadCsvBtn'),
+  tapeViewport: document.getElementById('tapeViewport'),
+  tapeSheet: document.getElementById('tapeSheet'),
+  tapeRuler: document.getElementById('tapeRuler'),
   tape: document.getElementById('tape'),
-  ruler: document.getElementById('ruler'),
-  dataBody: document.getElementById('dataBody'),
-  chart: document.getElementById('chart'),
+  fullTapeViewport: document.getElementById('fullTapeViewport'),
+  fullTapeSheet: document.getElementById('fullTapeSheet'),
+  fullTapeRuler: document.getElementById('fullTapeRuler'),
+  fullTape: document.getElementById('fullTape'),
+  selectionSummary: document.getElementById('selectionSummary'),
+  clearSelectionBtn: document.getElementById('clearSelectionBtn'),
+  solutionPanel: document.getElementById('solutionPanel'),
+  solutionContent: document.getElementById('solutionContent'),
+  selectedPeriodBadge: document.getElementById('selectedPeriodBadge'),
+  startReference: document.getElementById('startReference'),
+  endReference: document.getElementById('endReference'),
+  solutionTabs: [...document.querySelectorAll('.solution-tab')],
+  graphPanel: document.getElementById('graphPanel'),
   graphType: document.getElementById('graphType'),
-  cart: document.getElementById('cart'),
-  needle: document.getElementById('needle'),
-  motionStatus: document.getElementById('motionStatus'),
-  measureResult: document.getElementById('measureResult'),
-  dtSummary: document.getElementById('dtSummary'),
-  dotSummary: document.getElementById('dotSummary'),
-  distanceSummary: document.getElementById('distanceSummary'),
-  avgSpeedSummary: document.getElementById('avgSpeedSummary'),
-  interpretation: document.getElementById('interpretation'),
-  qFreq: document.getElementById('qFreq'),
-  ansDt: document.getElementById('ansDt'),
-  ansDistance: document.getElementById('ansDistance'),
-  ansType: document.getElementById('ansType'),
-  checkAnswersBtn: document.getElementById('checkAnswersBtn'),
-  answerFeedback: document.getElementById('answerFeedback')
+  chart: document.getElementById('chart'),
+  toggleGraphBtn: document.getElementById('toggleGraphBtn'),
+  toggleSolutionBtn: document.getElementById('toggleSolutionBtn'),
+  openSettingsBtn: document.getElementById('openSettingsBtn'),
+  settingsDialog: document.getElementById('settingsDialog'),
+  motionMode: document.getElementById('motionMode'),
+  v0: document.getElementById('v0'),
+  v0Out: document.getElementById('v0Out'),
+  acc: document.getElementById('acc'),
+  accOut: document.getElementById('accOut'),
+  duration: document.getElementById('duration'),
+  playbackRate: document.getElementById('playbackRate'),
+  applySettingsBtn: document.getElementById('applySettingsBtn'),
+  openPaperBtn: document.getElementById('openPaperBtn'),
+  paperDialog: document.getElementById('paperDialog'),
+  closePaperBtn: document.getElementById('closePaperBtn'),
+  paperDialogSummary: document.getElementById('paperDialogSummary'),
+  fitPaperBtn: document.getElementById('fitPaperBtn'),
+  actualPaperBtn: document.getElementById('actualPaperBtn')
 };
 
-const chartFont = '"TH Sarabun New", "Sarabun", Tahoma, Arial, sans-serif';
-const chartMathFont = '"Cambria Math", "STIX Two Math", "Noto Sans Math", "DejaVu Math TeX Gyre", "Times New Roman", serif';
+const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-let state = {
+const state = {
   points: [],
-  groups: [],
   currentIndex: 0,
-  running: false,
-  timer: null,
   selectedDots: [],
-  panelHidden: false,
-  valuesHidden: false,
-  periodHidden: false
+  running: false,
+  runTimer: null,
+  source: 'auto',
+  solutionType: 'instantaneous',
+  graphVisible: true,
+  solutionVisible: true,
+  paperFit: true,
+  dragging: false,
+  dragX: 0,
+  dragPointerOffset: 0,
+  manualTimer: null,
+  hoveredDot: null
 };
-
-function readSettings() {
-  let v0 = Number(els.v0.value);
-  let acc = Number(els.acc.value);
-  const mode = els.motionMode.value;
-
-  if (mode === 'constant') {
-    acc = 0;
-  } else if (mode === 'accelerate') {
-    acc = Math.abs(acc || 35);
-    if (v0 < 5) v0 = 25;
-  } else if (mode === 'decelerate') {
-    acc = -Math.abs(acc || 35);
-    if (v0 < 40) v0 = 85;
-  }
-
-  const freq = clamp(Number(els.freq.value), 10, 100);
-  const duration = clamp(Number(els.duration.value), 0.4, 5);
-  const groupSize = Math.round(clamp(Number(els.groupSize.value), 2, 10));
-  const scale = clamp(Number(els.scale.value), 40, 100);
-  const customSegments = readCustomSegments(duration);
-
-  return { mode, v0, acc, freq, duration, groupSize, scale, customSegments };
-}
 
 function clamp(value, min, max) {
-  if (Number.isNaN(value)) return min;
-  return Math.max(min, Math.min(max, value));
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.max(min, Math.min(max, number));
 }
 
-function readCustomSegments(duration) {
-  const minStep = 0.05;
-  const t1 = clamp(Number(els.customT1.value), minStep, Math.max(minStep, duration - minStep * 3));
-  const t2 = clamp(Number(els.customT2.value), t1 + minStep, Math.max(t1 + minStep, duration - minStep * 2));
-  const t3 = clamp(Number(els.customT3.value), t2 + minStep, Math.max(t2 + minStep, duration - minStep));
-  return [
-    { start: 0, end: t1, a: clamp(Number(els.customA1.value), -160, 160) },
-    { start: t1, end: t2, a: clamp(Number(els.customA2.value), -160, 160) },
-    { start: t2, end: t3, a: clamp(Number(els.customA3.value), -160, 160) },
-    { start: t3, end: duration, a: clamp(Number(els.customA4.value), -160, 160) }
-  ];
+function formatNumber(value, digits = 2) {
+  const clean = Math.abs(value) < 1e-9 ? 0 : value;
+  return clean.toFixed(digits);
 }
 
-function accelerationAt(time, segments) {
-  const segment = segments.find(item => time < item.end);
-  return segment ? segment.a : segments[segments.length - 1].a;
+function cssToken(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function syncControlOutputs() {
-  const s = readSettings();
-  document.body.classList.toggle('custom-mode', s.mode === 'custom');
-  els.v0.value = s.v0;
-  els.acc.value = s.acc;
-  els.v0Out.textContent = s.v0.toFixed(0);
-  els.accOut.textContent = s.acc.toFixed(0);
-  els.freq.value = s.freq;
-  els.duration.value = s.duration.toFixed(1);
-  els.groupSize.value = s.groupSize;
-  els.scale.value = s.scale;
-  els.customT1.value = s.customSegments[0].end.toFixed(1);
-  els.customT2.value = s.customSegments[1].end.toFixed(1);
-  els.customT3.value = s.customSegments[2].end.toFixed(1);
-  els.customA1.value = s.customSegments[0].a;
-  els.customA2.value = s.customSegments[1].a;
-  els.customA3.value = s.customSegments[2].a;
-  els.customA4.value = s.customSegments[3].a;
-  els.qFreq.textContent = s.freq;
+function readSettings() {
+  const mode = els.motionMode.value;
+  const v0 = clamp(els.v0.value, 0, 120);
+  const magnitude = clamp(els.acc.value, 0, 120);
+  const duration = clamp(els.duration.value, 0.4, 5);
+  const totalPeriods = Math.round(duration * FREQUENCY);
+  const playbackRate = clamp(els.playbackRate.value, 0.5, 2);
+  const acceleration = mode === 'constant' ? 0 : mode === 'decelerate' ? -magnitude : magnitude;
+  return { mode, v0, magnitude, acceleration, duration, totalPeriods, playbackRate };
 }
 
-function generatePoints() {
-  const s = readSettings();
-  const dt = 1 / s.freq;
-  const count = Math.floor(s.duration / dt) + 1;
+function syncSettingsUi() {
+  const settings = readSettings();
+  els.v0Out.textContent = `${formatNumber(settings.v0, 0)} cm/s`;
+  els.accOut.textContent = `${formatNumber(settings.magnitude, 0)} cm/s²`;
+  els.acc.disabled = settings.mode === 'constant';
+  const helper = els.duration.closest('.field')?.querySelector('small');
+  if (helper) {
+    helper.textContent = `${formatNumber(settings.duration, 3)} s · ได้ ${settings.totalPeriods + 1} จุด · ห่างจุดละ 1/50 s`;
+  }
+}
 
-  if (s.mode === 'custom') {
-    generateCustomPoints(s, dt, count);
+function generateAutoPoints() {
+  const settings = readSettings();
+  const points = [];
+  const stopTime = settings.acceleration < 0 && settings.v0 > 0
+    ? settings.v0 / Math.abs(settings.acceleration)
+    : 0;
+
+  for (let index = 0; index <= settings.totalPeriods; index += 1) {
+    const t = index * PERIOD;
+    let x = settings.v0 * t + 0.5 * settings.acceleration * t * t;
+    let v = settings.v0 + settings.acceleration * t;
+    let a = settings.acceleration;
+
+    if (settings.mode === 'decelerate' && t >= stopTime) {
+      x = settings.v0 * stopTime + 0.5 * settings.acceleration * stopTime * stopTime;
+      v = 0;
+      a = 0;
+    }
+
+    points.push({ index, t, x: Math.max(0, x), v: Math.max(0, v), a });
+  }
+
+  return points;
+}
+
+function regenerateSimulation() {
+  pauseSimulation();
+  state.source = 'auto';
+  state.points = generateAutoPoints();
+  state.currentIndex = 0;
+  state.selectedDots = [];
+  syncSettingsUi();
+  renderStatic();
+  renderFrame();
+}
+
+function renderStatic() {
+  renderTape(els.tape, false);
+  renderTape(els.fullTape, true);
+  renderSelectionSummary();
+  syncReferencePickers();
+  renderSolution();
+  drawGraph();
+}
+
+function currentPoint() {
+  return state.points[state.currentIndex] || { index: 0, t: 0, x: 0, v: 0, a: 0 };
+}
+
+function maximumPosition() {
+  const values = state.points.map(point => point.x);
+  return Math.max(1, ...values);
+}
+
+function renderFrame() {
+  renderStage();
+  renderReadouts();
+  refreshDotStates();
+  updateTransportState();
+  drawGraph();
+}
+
+function renderStage() {
+  const point = currentPoint();
+  const stageWidth = els.labStage.clientWidth || 720;
+  const cartWidth = els.cart.offsetWidth || 160;
+  const base = stageWidth >= 640 ? 112 : 83;
+  const available = Math.max(20, stageWidth - base - cartWidth - 24);
+  const domain = state.source === 'manual' ? 120 : maximumPosition();
+  const ratio = clamp(point.x / Math.max(1, domain), 0, 1);
+  const translation = ratio * available;
+  els.cart.style.setProperty('--cart-x', `${translation}px`);
+  els.paperTail.style.transform = `scaleX(${clamp(0.08 + ratio * 0.92, 0.08, 1)})`;
+}
+
+function renderReadouts() {
+  const point = currentPoint();
+  els.motionStatus.className = 'status';
+  if (state.dragging) {
+    els.motionStatus.classList.add('is-manual');
+    els.motionStatus.textContent = 'กำลังบันทึกจากการลาก';
+  } else if (state.running) {
+    els.motionStatus.classList.add('is-running');
+    els.motionStatus.textContent = 'กำลังเคาะจุด';
+  } else if (state.source === 'manual') {
+    els.motionStatus.classList.add('is-manual');
+    els.motionStatus.textContent = 'บันทึกจากการลากแล้ว';
+  } else {
+    els.motionStatus.textContent = point.index === 0 ? 'พร้อมทดลอง' : 'หยุดชั่วคราว';
+  }
+}
+
+function tapeLayout(container, fullPaper) {
+  const viewport = fullPaper ? els.fullTapeViewport : els.tapeViewport;
+  const parentWidth = viewport.clientWidth || 760;
+  const maxX = maximumPosition();
+  const fit = fullPaper && state.paperFit;
+  const domain = Math.max(1, Math.ceil(maxX));
+  const inset = fit ? 28 : 48;
+  const fitScale = Math.max(1, (parentWidth - 2 - inset * 2) / domain);
+  const shouldFitMainTape = !fullPaper && domain <= FIT_TO_VIEW_DOMAIN;
+  const scale = fit || shouldFitMainTape ? fitScale : Math.max(MIN_TAPE_SCALE, fitScale);
+  const width = Math.max(parentWidth - 2, domain * scale + inset * 2);
+  const usable = Math.max(1, width - inset * 2);
+  return {
+    width,
+    domain,
+    fit,
+    scale,
+    left(point) {
+      return inset + (point.x / domain) * usable;
+    }
+  };
+}
+
+function renderTape(container, fullPaper) {
+  if (!state.points.length) {
+    container.replaceChildren();
     return;
   }
 
-  const raw = [];
-  let lastX = 0;
+  const layout = tapeLayout(container, fullPaper);
+  const sheet = fullPaper ? els.fullTapeSheet : els.tapeSheet;
+  const ruler = fullPaper ? els.fullTapeRuler : els.tapeRuler;
+  sheet.style.width = `${layout.width}px`;
+  container.style.width = `${layout.width}px`;
+  const fragment = document.createDocumentFragment();
 
-  for (let i = 0; i < count; i++) {
-    const t = i * dt;
-    let x = s.v0 * t + 0.5 * s.acc * t * t;
-    let v = s.v0 + s.acc * t;
-
-    if (s.mode === 'decelerate' && v < 0) {
-      const stopTime = Math.max(0, s.v0 / Math.abs(s.acc));
-      x = s.v0 * stopTime + 0.5 * s.acc * stopTime * stopTime;
-      v = 0;
-    }
-
-    if (x < lastX) x = lastX;
-    lastX = x;
-
-    raw.push({ index: i, t, x, v, a: s.acc });
-  }
-
-  state.points = raw;
-  state.groups = buildGroups(raw, s.groupSize);
-  state.currentIndex = Math.min(state.currentIndex, raw.length - 1);
-}
-
-function generateCustomPoints(settings, dt, count) {
-  const raw = [{ index: 0, t: 0, x: 0, v: settings.v0, a: accelerationAt(0, settings.customSegments) }];
-
-  for (let i = 1; i < count; i++) {
-    const prev = raw[i - 1];
-    const t = i * dt;
-    const next = advanceCustomMotion(prev, t, settings.customSegments);
-    const x = Math.max(prev.x, next.x);
-    const v = next.v;
-    raw.push({ index: i, t, x, v, a: accelerationAt(t, settings.customSegments) });
-  }
-
-  state.points = raw;
-  state.groups = buildGroups(raw, settings.groupSize);
-  state.currentIndex = Math.min(state.currentIndex, raw.length - 1);
-}
-
-function advanceCustomMotion(startPoint, targetTime, segments) {
-  let time = startPoint.t;
-  let x = startPoint.x;
-  let v = startPoint.v;
-
-  while (time < targetTime - 0.000001) {
-    const segment = segments.find(item => time < item.end) || segments[segments.length - 1];
-    const nextBoundary = Math.min(segment.end, targetTime);
-    const step = nextBoundary - time;
-    const nextV = v + segment.a * step;
-
-    if (nextV < 0) {
-      const stopTime = segment.a < 0 ? Math.max(0, v / Math.abs(segment.a)) : 0;
-      x += v * stopTime + 0.5 * segment.a * stopTime * stopTime;
-      v = 0;
-    } else {
-      x += v * step + 0.5 * segment.a * step * step;
-      v = nextV;
-    }
-
-    time = nextBoundary;
-  }
-
-  return { x, v };
-}
-
-function buildGroups(points, groupSize) {
-  const groups = [];
-  let prevVelocity = null;
-
-  for (let start = 0; start + groupSize < points.length; start += groupSize) {
-    const end = start + groupSize;
-    const p1 = points[start];
-    const p2 = points[end];
-    const ds = p2.x - p1.x;
-    const dt = p2.t - p1.t;
-    const vAvg = ds / dt;
-    const accApprox = prevVelocity === null ? null : (vAvg - prevVelocity) / dt;
-    const trend = getSpacingTrend(points, start, end);
-    groups.push({
-      n: groups.length + 1,
-      start,
-      end,
-      t1: p1.t,
-      t2: p2.t,
-      ds,
-      dt,
-      vAvg,
-      accApprox,
-      trend
-    });
-    prevVelocity = vAvg;
-  }
-
-  return groups;
-}
-
-function getSpacingTrend(points, start, end) {
-  const gaps = [];
-  for (let i = start + 1; i <= end; i++) {
-    gaps.push(points[i].x - points[i - 1].x);
-  }
-  const first = average(gaps.slice(0, Math.ceil(gaps.length / 2)));
-  const second = average(gaps.slice(Math.floor(gaps.length / 2)));
-  const diff = second - first;
-  if (Math.abs(diff) < 0.05) return 'ห่างคงที่';
-  return diff > 0 ? 'ห่างมากขึ้น' : 'ห่างลดลง';
-}
-
-function average(arr) {
-  return arr.reduce((sum, x) => sum + x, 0) / Math.max(1, arr.length);
-}
-
-function renderAll() {
-  syncControlOutputs();
-  generatePoints();
-  state.currentIndex = Math.min(state.currentIndex, state.points.length - 1);
-  renderTape();
-  renderTable();
-  renderSummary();
-  renderChart();
-  updateAnimationFrame();
-}
-
-function renderTape() {
-  const s = readSettings();
-  const maxX = Math.max(...state.points.map(p => p.x), 10);
-  const wrapWidth = els.tape.parentElement.clientWidth || 0;
-  const width = Math.max(wrapWidth, Math.ceil(maxX * s.scale + 96));
-  els.tape.style.width = `${width}px`;
-  els.ruler.style.width = `${width}px`;
-  els.tape.innerHTML = '';
-  els.ruler.innerHTML = '';
-
-  drawRuler(maxX, s.scale, width);
-
-  state.points.slice(0, state.currentIndex + 1).forEach((p) => {
+  state.points.forEach(point => {
     const dot = document.createElement('button');
     dot.type = 'button';
-    dot.className = 'dot';
-    dot.style.left = `${40 + p.x * s.scale}px`;
-    dot.title = `จุดที่ ${p.index}: t=${p.t.toFixed(3)} s, s=${p.x.toFixed(2)} cm`;
-    dot.dataset.index = p.index;
-    dot.addEventListener('click', () => selectDot(p.index));
-    els.tape.appendChild(dot);
+    dot.className = 'tape-dot';
+    dot.dataset.index = String(point.index);
+    dot.style.left = `${layout.left(point)}px`;
+    dot.setAttribute('aria-label', `จุดที่ ${point.index} บนแถบกระดาษ`);
+    dot.tabIndex = -1;
 
-    if (p.index % s.groupSize === 0) {
-      const label = document.createElement('div');
-      label.className = 'dot-label';
-      label.style.left = `${40 + p.x * s.scale}px`;
-      label.textContent = p.index;
-      els.tape.appendChild(label);
-    }
+    const referenceLabelElement = document.createElement('span');
+    referenceLabelElement.className = 'ref-label';
+    referenceLabelElement.setAttribute('aria-hidden', 'true');
+
+    const distanceLabelElement = document.createElement('span');
+    distanceLabelElement.className = 'distance-label';
+    distanceLabelElement.setAttribute('aria-hidden', 'true');
+    dot.append(referenceLabelElement, distanceLabelElement);
+    fragment.append(dot);
   });
 
-  state.groups.forEach((g) => {
-    if (g.end > state.currentIndex) return;
-    const x1 = 40 + state.points[g.start].x * s.scale;
-    const x2 = 40 + state.points[g.end].x * s.scale;
-    const bracket = document.createElement('div');
-    bracket.className = 'group-bracket';
-    bracket.style.left = `${x1}px`;
-    bracket.style.width = `${Math.max(8, x2 - x1)}px`;
-    bracket.innerHTML = `<span>ช่วง ${g.n}</span>`;
-    els.tape.appendChild(bracket);
-  });
-
-  renderSelectionGuides(s);
-  refreshDotSelection();
+  container.replaceChildren(fragment);
+  renderRuler(ruler, layout);
+  refreshDotStates();
 }
 
-function renderSelectionGuides(settings) {
-  els.tape.querySelectorAll('.selection-guide, .selection-ruler-tag').forEach(el => el.remove());
-
-  state.selectedDots.forEach((index) => {
-    if (index > state.currentIndex) return;
-    const point = state.points[index];
-    if (!point) return;
-
-    const x = 40 + point.x * settings.scale;
-    const guide = document.createElement('div');
-    guide.className = 'selection-guide';
-    guide.style.left = `${x}px`;
-    els.tape.appendChild(guide);
-
-    const tag = document.createElement('div');
-    tag.className = 'selection-ruler-tag';
-    tag.style.left = `${x}px`;
-    tag.textContent = `${point.x.toFixed(1)} cm`;
-    els.tape.appendChild(tag);
-  });
+function rulerTickStepMillimetres(scale) {
+  const pxPerMillimetre = scale / 10;
+  if (pxPerMillimetre >= 1.6) return 1;
+  if (pxPerMillimetre >= 0.8) return 5;
+  return 10;
 }
 
-function drawRuler(maxX, scale, width) {
-  const maxCm = Math.ceil(maxX / 5) * 5;
-  for (let mm = 0; mm <= maxCm * 10; mm++) {
+function renderRuler(ruler, layout) {
+  const fragment = document.createDocumentFragment();
+
+  const unit = document.createElement('span');
+  unit.className = 'ruler-unit';
+  unit.textContent = 'cm';
+  fragment.append(unit);
+
+  const totalMillimetres = Math.ceil(layout.domain * 10);
+  const tickStep = rulerTickStepMillimetres(layout.scale);
+  for (let mm = 0; mm <= totalMillimetres; mm += tickStep) {
     const cm = mm / 10;
-    const mark = document.createElement('div');
-    const isCm = mm % 10 === 0;
-    const isHalfCm = mm % 5 === 0;
-    mark.className = `ruler-mark ${isCm ? 'major' : isHalfCm ? 'half' : 'minor'}`;
-    mark.style.left = `${40 + cm * scale}px`;
-    els.ruler.appendChild(mark);
+    const tick = document.createElement('span');
+    const tickType = mm % 10 === 0 ? 'major' : mm % 5 === 0 ? 'mid' : 'minor';
+    tick.className = `ruler-tick ${tickType}`;
+    tick.style.left = `${layout.left({ x: cm })}px`;
+    tick.innerHTML = mm > 0 && mm % 10 === 0 ? `<i></i><b>${cm}</b>` : '<i></i>';
+    fragment.append(tick);
+  }
 
-    if (isCm && Number.isInteger(cm)) {
-      const label = document.createElement('div');
-      label.className = 'ruler-label';
-      label.style.left = `${40 + cm * scale}px`;
-      label.textContent = `${cm} cm`;
-      els.ruler.appendChild(label);
+  ruler.replaceChildren(fragment);
+}
+
+function refreshDotStates() {
+  [els.tape, els.fullTape].forEach(container => {
+    container.querySelectorAll('.tape-dot').forEach(dot => {
+      const index = Number(dot.dataset.index);
+      const point = state.points[index];
+      const distanceText = pointPositionText(point);
+      const referenceIndex = state.selectedDots.indexOf(index);
+      dot.classList.toggle('is-current', index === state.currentIndex);
+      dot.classList.toggle('is-future', state.source === 'auto' && index > state.currentIndex);
+      dot.classList.toggle('is-selected', referenceIndex >= 0);
+      dot.classList.toggle('is-hovered', index === state.hoveredDot);
+      const label = referenceIndex >= 0 ? referenceLabel(referenceIndex) : '';
+      dot.dataset.refLabel = label;
+      dot.dataset.distance = distanceText;
+      const labelElement = dot.querySelector('.ref-label');
+      if (labelElement) labelElement.textContent = label;
+      const distanceLabelElement = dot.querySelector('.distance-label');
+      if (distanceLabelElement) distanceLabelElement.textContent = distanceText;
+      dot.setAttribute('aria-pressed', String(state.selectedDots.includes(index)));
+      dot.setAttribute('aria-label', `จุดที่ ${index} ระยะ ${distanceText} บนแถบกระดาษ`);
+    });
+  });
+}
+
+function pointPositionText(point) {
+  return `${formatNumber(point?.x ?? 0)} cm`;
+}
+
+function visibleTapePoints() {
+  return state.source === 'auto'
+    ? state.points.slice(0, state.currentIndex + 1)
+    : state.points;
+}
+
+function nearestTapePointIndex(container, fullPaper, event) {
+  if (!state.points.length) return null;
+
+  const points = visibleTapePoints();
+  if (!points.length) return null;
+
+  const layout = tapeLayout(container, fullPaper);
+  const rect = container.getBoundingClientRect();
+  const pointerX = event.clientX - rect.left;
+  let nearest = points[0];
+  let nearestDistance = Math.abs(layout.left(nearest) - pointerX);
+
+  points.forEach(point => {
+    const distance = Math.abs(layout.left(point) - pointerX);
+    if (distance < nearestDistance) {
+      nearest = point;
+      nearestDistance = distance;
     }
-  }
-  els.ruler.style.minWidth = `${width}px`;
-}
-
-function renderTable() {
-  els.dataBody.innerHTML = '';
-  state.groups.forEach((g) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${g.n}</td>
-      <td>${g.start} - ${g.end}</td>
-      <td>${g.t1.toFixed(3)}</td>
-      <td>${g.t2.toFixed(3)}</td>
-      <td>${g.ds.toFixed(2)}</td>
-      <td>${g.dt.toFixed(3)}</td>
-      <td>${g.vAvg.toFixed(2)}</td>
-      <td>${g.accApprox === null ? '-' : g.accApprox.toFixed(2)}</td>
-      <td>${g.trend}</td>
-    `;
-    els.dataBody.appendChild(tr);
-  });
-}
-
-function renderSummary() {
-  const s = readSettings();
-  const dt = 1 / s.freq;
-  const first = state.points[0];
-  const last = state.points[state.points.length - 1];
-  const totalDistance = last.x - first.x;
-  const totalTime = last.t - first.t;
-  const avgSpeed = totalDistance / Math.max(totalTime, 0.0001);
-
-  els.dtSummary.textContent = `${dt.toFixed(3)} s`;
-  els.dotSummary.textContent = `${state.points.length} จุด`;
-  els.distanceSummary.textContent = `${totalDistance.toFixed(2)} cm`;
-  els.avgSpeedSummary.textContent = `${avgSpeed.toFixed(2)} cm/s`;
-  els.motionStatus.textContent = statusText(s);
-
-  let text = '';
-  if (s.mode === 'custom') {
-    const profile = s.customSegments
-      .map((segment, index) => `ช่วง ${index + 1}: a=${segment.a.toFixed(0)} cm/s²`)
-      .join(', ');
-    text = `ข้อสรุป: โหมดกำหนดเองใช้ความเร่งหลายช่วงในรอบเดียว (${profile}) จึงสามารถเห็นจุดห่างเพิ่มขึ้น คงที่ หรือลดลงในแถบเดียวกันได้`;
-  } else if (Math.abs(s.acc) < 0.001) {
-    text = 'ข้อสรุป: ระยะห่างระหว่างจุดใกล้เคียงกัน แสดงว่าวัตถุเคลื่อนที่ด้วยความเร็วคงที่ ความเร่งประมาณศูนย์';
-  } else if (s.acc > 0) {
-    text = 'ข้อสรุป: จุดบนแถบกระดาษห่างมากขึ้นเรื่อย ๆ แสดงว่าวัตถุเคลื่อนที่เร็วขึ้น จึงมีความเร่งในทิศทางเดียวกับการเคลื่อนที่';
-  } else {
-    text = 'ข้อสรุป: จุดบนแถบกระดาษห่างลดลงเรื่อย ๆ แสดงว่าวัตถุเคลื่อนที่ช้าลง จึงเกิดความหน่วงหรือความเร่งทิศตรงข้ามกับการเคลื่อนที่';
-  }
-  els.interpretation.textContent = text;
-}
-
-function statusText(settings) {
-  if (settings.mode === 'custom') {
-    const hasPositive = settings.customSegments.some(segment => segment.a > 0);
-    const hasNegative = settings.customSegments.some(segment => segment.a < 0);
-    if (hasPositive && hasNegative) return 'กำหนดเอง: เร่งและหน่วง';
-    if (hasPositive) return 'กำหนดเอง: เร่งขึ้น';
-    if (hasNegative) return 'กำหนดเอง: หน่วงลง';
-    return 'กำหนดเอง: คงที่';
-  }
-  if (settings.mode === 'constant' || Math.abs(settings.acc) < 0.001) return 'ความเร็วคงที่';
-  if (settings.acc > 0) return 'กำลังเร่ง';
-  return 'กำลังหน่วง';
-}
-
-function renderChart() {
-  const ctx = els.chart.getContext('2d');
-  const w = els.chart.width;
-  const h = els.chart.height;
-  ctx.clearRect(0, 0, w, h);
-
-  const type = els.graphType.value;
-  let values;
-  let visibleValues;
-  let yLabel;
-  let title;
-
-  if (type === 'velocity') {
-    values = state.points.map(p => ({ t: p.t, y: p.v }));
-    yLabel = 'v (cm/s)';
-    title = 'กราฟความเร็ว - เวลา';
-  } else if (type === 'acceleration') {
-    values = state.points.map(p => ({ t: p.t, y: p.a }));
-    yLabel = 'a (cm/s²)';
-    title = 'กราฟความเร่ง - เวลา';
-  } else {
-    values = state.points.map(p => ({ t: p.t, y: p.x }));
-    yLabel = 's (cm)';
-    title = 'กราฟตำแหน่ง - เวลา';
-  }
-
-  visibleValues = values.slice(0, Math.max(1, state.currentIndex + 1));
-  drawAxisChart(ctx, visibleValues, title, 't (s)', yLabel, w, h, values);
-}
-
-function drawAxisChart(ctx, values, title, xLabel, yLabel, w, h, domainValues = values) {
-  const pad = { left: 78, right: 26, top: 48, bottom: 58 };
-  const xMin = 0;
-  const xMax = Math.max(...domainValues.map(v => v.t), 1);
-  let yMin = Math.min(...domainValues.map(v => v.y));
-  let yMax = Math.max(...domainValues.map(v => v.y));
-
-  if (Math.abs(yMax - yMin) < 0.001) {
-    yMax += Math.max(1, Math.abs(yMax) * 0.2);
-    yMin -= Math.max(1, Math.abs(yMin) * 0.2);
-  }
-
-  const yPad = (yMax - yMin) * 0.12;
-  yMax += yPad;
-  yMin -= yPad;
-
-  const plotW = w - pad.left - pad.right;
-  const plotH = h - pad.top - pad.bottom;
-  const xToPx = (x) => pad.left + ((x - xMin) / (xMax - xMin)) * plotW;
-  const yToPx = (y) => pad.top + (1 - ((y - yMin) / (yMax - yMin))) * plotH;
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.strokeStyle = '#d8e3f4';
-  ctx.lineWidth = 1;
-  ctx.font = `18px ${chartMathFont}`;
-  ctx.fillStyle = '#60718a';
-
-  for (let i = 0; i <= 5; i++) {
-    const x = pad.left + (plotW / 5) * i;
-    const t = xMin + ((xMax - xMin) / 5) * i;
-    ctx.beginPath();
-    ctx.moveTo(x, pad.top);
-    ctx.lineTo(x, pad.top + plotH);
-    ctx.stroke();
-    ctx.fillText(t.toFixed(1), x - 10, pad.top + plotH + 28);
-  }
-
-  for (let i = 0; i <= 5; i++) {
-    const y = pad.top + (plotH / 5) * i;
-    const val = yMax - ((yMax - yMin) / 5) * i;
-    ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(pad.left + plotW, y);
-    ctx.stroke();
-    ctx.fillText(val.toFixed(1), 14, y + 6);
-  }
-
-  ctx.strokeStyle = '#10243f';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(pad.left, pad.top);
-  ctx.lineTo(pad.left, pad.top + plotH);
-  ctx.lineTo(pad.left + plotW, pad.top + plotH);
-  ctx.stroke();
-
-  ctx.strokeStyle = '#2563eb';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  values.forEach((point, i) => {
-    const x = xToPx(point.t);
-    const y = yToPx(point.y);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  ctx.fillStyle = '#2563eb';
-  const step = Math.max(1, Math.floor(values.length / 18));
-  values.forEach((point, i) => {
-    if (i % step !== 0 && i !== values.length - 1) return;
-    ctx.beginPath();
-    ctx.arc(xToPx(point.t), yToPx(point.y), 4, 0, Math.PI * 2);
-    ctx.fill();
   });
 
-  ctx.fillStyle = '#10243f';
-  ctx.font = `bold 22px ${chartFont}`;
-  ctx.fillText(title, pad.left, 30);
-  ctx.font = `18px ${chartMathFont}`;
-  ctx.fillText(xLabel, w / 2 - 18, h - 15);
-  ctx.save();
-  ctx.translate(22, h / 2 + 35);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText(yLabel, 0, 0);
-  ctx.restore();
+  return nearest.index;
 }
 
-function runSimulation() {
-  clearInterval(state.timer);
-  state.running = true;
-  els.needle.classList.add('active');
-  renderTape();
-  const s = readSettings();
-  const tickMs = Math.max(10, (1 / s.freq) * 1000);
-  state.timer = setInterval(() => {
-    if (state.currentIndex >= state.points.length - 1) {
-      pauseSimulation();
-      return;
-    }
-    state.currentIndex += 1;
-    renderTape();
-    renderChart();
-    updateAnimationFrame();
-  }, tickMs);
+function setHoveredDot(index) {
+  const nextIndex = Number.isInteger(index) ? index : null;
+  if (state.hoveredDot === nextIndex) return;
+  state.hoveredDot = nextIndex;
+  refreshDotStates();
 }
 
-function pauseSimulation() {
-  state.running = false;
-  els.needle.classList.remove('active');
-  clearInterval(state.timer);
+function handleTapePointerMove(event) {
+  const container = event.currentTarget;
+  const fullPaper = container === els.fullTape;
+  setHoveredDot(nearestTapePointIndex(container, fullPaper, event));
 }
 
-function stepSimulation() {
-  pauseSimulation();
-  if (state.currentIndex < state.points.length - 1) {
-    state.currentIndex += 1;
-  } else {
-    state.currentIndex = 0;
-  }
-  renderTape();
-  renderChart();
-  updateAnimationFrame();
+function handleTapePointerLeave() {
+  setHoveredDot(null);
 }
 
-function updateAnimationFrame() {
-  const s = readSettings();
-  const point = state.points[state.currentIndex] || state.points[0];
-  const sceneWidth = els.cart.parentElement.clientWidth || 900;
-  const machineOffset = Math.min(230, sceneWidth * 0.28);
-  const cartWidth = els.cart.offsetWidth || 128;
-  const travelLimit = Math.max(0, sceneWidth - machineOffset - cartWidth - 24);
-  const maxX = Math.max(...state.points.map(p => p.x), 1);
-  const px = Math.min((point.x / maxX) * travelLimit, travelLimit);
-  els.cart.style.transform = `translateX(${px}px)`;
-  scrollTapeToCurrentDot(point, s);
-  document.querySelectorAll('.dot').forEach((dot) => {
-    dot.classList.toggle('current', Number(dot.dataset.index) === state.currentIndex);
-  });
+function handleTapeClick(event) {
+  const container = event.currentTarget;
+  const fullPaper = container === els.fullTape;
+  const pointIndex = nearestTapePointIndex(container, fullPaper, event);
+  if (Number.isInteger(pointIndex)) selectDot(pointIndex);
 }
 
-function scrollTapeToCurrentDot(point, settings) {
-  if (!state.running) return;
-  const wrap = els.tape.parentElement;
-  const x = 40 + point.x * settings.scale;
-  const target = Math.max(0, x - wrap.clientWidth * 0.72);
-  wrap.scrollTo({ left: target, behavior: 'smooth' });
+function referenceLabel(index) {
+  return String.fromCharCode(65 + index);
+}
+
+function referenceName(pointIndex) {
+  const index = state.selectedDots.indexOf(pointIndex);
+  return index >= 0 ? referenceLabel(index) : `จุด ${pointIndex}`;
 }
 
 function selectDot(index) {
   if (state.selectedDots.includes(index)) {
-    state.selectedDots = state.selectedDots.filter(x => x !== index);
-  } else {
-    if (state.selectedDots.length >= 2) state.selectedDots.shift();
+    state.selectedDots = state.selectedDots.filter(value => value !== index);
+  } else if (state.selectedDots.length < 26) {
     state.selectedDots.push(index);
   }
-  renderTape();
-  updateMeasureResult();
+  state.selectedDots.sort((a, b) => a - b);
+  refreshDotStates();
+  renderSelectionSummary();
+  syncReferencePickers();
+  renderSolution();
+  drawGraph();
 }
 
-function refreshDotSelection() {
-  document.querySelectorAll('.dot').forEach((dot) => {
-    const idx = Number(dot.dataset.index);
-    dot.classList.toggle('selected', state.selectedDots.includes(idx));
-    dot.classList.toggle('current', idx === state.currentIndex);
+function clearSelection() {
+  state.selectedDots = [];
+  refreshDotStates();
+  renderSelectionSummary();
+  syncReferencePickers();
+  renderSolution();
+  drawGraph();
+}
+
+function renderSelectionSummary() {
+  if (!state.selectedDots.length) {
+    els.selectionSummary.textContent = 'เลือกจุดอ้างอิงบนแถบได้หลายจุด ระบบจะกำกับ A, B, C… จากซ้ายไปขวา';
+    return;
+  }
+
+  if (state.selectedDots.length === 1) {
+    const pointIndex = state.selectedDots[0];
+    els.selectionSummary.textContent = `A = จุด ${pointIndex} · ${pointPositionText(state.points[pointIndex])} · คำนวณอัตราเร็ว ณ จุดได้แล้ว`;
+    return;
+  }
+
+  els.selectionSummary.textContent = state.selectedDots
+    .map((pointIndex, referenceIndex) => `${referenceLabel(referenceIndex)} = จุด ${pointIndex} · ${pointPositionText(state.points[pointIndex])}`)
+    .join(' · ');
+}
+
+function syncReferencePickers() {
+  const previousStart = Number(els.startReference.value);
+  const previousEnd = Number(els.endReference.value);
+  const options = state.selectedDots.map((pointIndex, referenceIndex) =>
+    `<option value="${pointIndex}">${referenceLabel(referenceIndex)} · จุด ${pointIndex} · ${pointPositionText(state.points[pointIndex])}</option>`
+  ).join('');
+  const ready = state.selectedDots.length >= 1;
+  els.startReference.innerHTML = ready ? options : '<option value="">เลือกจุด</option>';
+  els.endReference.innerHTML = ready ? options : '<option value="">เลือกจุด</option>';
+  els.startReference.disabled = !ready;
+  els.endReference.disabled = !ready;
+  if (!ready) return;
+  els.startReference.value = state.selectedDots.includes(previousStart) ? String(previousStart) : String(state.selectedDots[0]);
+  els.endReference.value = state.selectedDots.includes(previousEnd) ? String(previousEnd) : String(state.selectedDots[state.selectedDots.length - 1]);
+  if (els.startReference.value === els.endReference.value && state.selectedDots.length >= 2) {
+    const first = String(state.selectedDots[0]);
+    const last = String(state.selectedDots[state.selectedDots.length - 1]);
+    els.endReference.value = els.startReference.value === last ? first : last;
+  }
+}
+
+function selectionData() {
+  if (state.selectedDots.length < 2) return null;
+  let startIndex = Number(els.startReference.value);
+  let endIndex = Number(els.endReference.value);
+  if (!state.selectedDots.includes(startIndex)) startIndex = state.selectedDots[0];
+  if (!state.selectedDots.includes(endIndex)) endIndex = state.selectedDots[state.selectedDots.length - 1];
+  if (startIndex > endIndex) [startIndex, endIndex] = [endIndex, startIndex];
+  const start = state.points[startIndex];
+  const end = state.points[endIndex];
+  if (!start || !end || endIndex <= startIndex) return null;
+
+  let distance = 0;
+  for (let index = startIndex + 1; index <= endIndex; index += 1) {
+    distance += Math.abs(state.points[index].x - state.points[index - 1].x);
+  }
+
+  const periods = endIndex - startIndex;
+  const dt = periods * PERIOD;
+  const displacement = end.x - start.x;
+  return {
+    start,
+    end,
+    periods,
+    dt,
+    distance,
+    displacement,
+    avgSpeed: distance / dt,
+    avgVelocity: displacement / dt,
+    avgAcceleration: (end.v - start.v) / dt
+  };
+}
+
+function fraction(numerator, denominator) {
+  return `<span class="fraction"><span>${numerator}</span><span>${denominator}</span></span>`;
+}
+
+function localVelocity(index) {
+  const lastIndex = state.points.length - 1;
+  const beforeIndex = index <= 0 ? 0 : index - 1;
+  const afterIndex = index >= lastIndex ? lastIndex : index + 1;
+  const before = state.points[beforeIndex];
+  const after = state.points[afterIndex];
+  const intervals = Math.max(1, afterIndex - beforeIndex);
+  const dt = intervals / FREQUENCY;
+  return {
+    index,
+    beforeIndex,
+    afterIndex,
+    before,
+    after,
+    intervals,
+    dt,
+    value: (after.x - before.x) / dt
+  };
+}
+
+function uniquePointIndices(indices) {
+  return [...new Set(indices.filter(index => Number.isInteger(index) && state.points[index]))].sort((a, b) => a - b);
+}
+
+function solutionPointRows(data, extraIndices = []) {
+  const selectedInRange = state.selectedDots.filter(index => index >= data.start.index && index <= data.end.index);
+  const indices = uniquePointIndices([
+    data.start.index,
+    data.end.index,
+    ...selectedInRange,
+    ...extraIndices
+  ]);
+
+  return indices.map((index, rowIndex) => {
+    const point = state.points[index];
+    const previous = rowIndex > 0 ? state.points[indices[rowIndex - 1]] : null;
+    const deltaS = previous ? point.x - previous.x : 0;
+    return {
+      index,
+      point,
+      label: referenceName(index),
+      t: point.t ?? index / FREQUENCY,
+      segmentDistance: Math.abs(deltaS)
+    };
   });
 }
 
-function updateMeasureResult() {
-  if (state.selectedDots.length < 2) {
-    els.measureResult.textContent = state.selectedDots.length === 1
-      ? `เลือกจุดที่ ${state.selectedDots[0]} แล้ว เลือกอีก 1 จุด`
-      : 'ยังไม่ได้เลือกจุด';
+function solutionReadingMarkup(data, extraIndices = []) {
+  const graphRows = solutionPointRows(data);
+  const rows = solutionPointRows(data, extraIndices);
+  if (graphRows.length < 2) return '';
+
+  const positions = graphRows.map(row => row.point.x);
+  const minS = Math.min(...positions);
+  const maxS = Math.max(...positions);
+  const spanS = Math.max(0.001, maxS - minS);
+  const ratioFor = value => (value - minS) / spanS;
+  const markers = graphRows.map((row, index) => `
+    <span class="solution-graph-marker" style="--marker-ratio: ${ratioFor(row.point.x)}; --marker-row: ${index % 3}">
+      <i></i>
+      <b>${row.label}</b>
+      <small>${pointPositionText(row.point)}</small>
+    </span>
+  `).join('');
+  const segments = graphRows.slice(1).map((row, index) => {
+    const previous = graphRows[index];
+    const start = ratioFor(previous.point.x);
+    const end = ratioFor(row.point.x);
+    const left = Math.min(start, end);
+    const rawWidth = Math.abs(end - start);
+    const width = Math.max(0.008, rawWidth);
+    const compactClass = rawWidth < 0.08 ? ' is-compact' : '';
+    return `
+      <span class="solution-graph-segment${compactClass}" style="--segment-left: ${left}; --segment-width: ${width}">
+        <b>${formatNumber(row.segmentDistance)} cm</b>
+      </span>
+    `;
+  }).join('');
+  const tableRows = rows.map((row, index) => `
+    <div class="point-row" role="row">
+      <span role="cell">${row.label}</span>
+      <span role="cell">จุด ${row.index}</span>
+      <span role="cell">${formatNumber(row.t, 3)} s</span>
+      <span role="cell">${pointPositionText(row.point)}</span>
+      <span role="cell">${index === 0 ? 'เริ่ม' : `${formatNumber(row.segmentDistance)} cm`}</span>
+    </div>
+  `).join('');
+
+  return `
+    <section class="solution-reading" aria-label="อ่านค่าระยะจากจุดบนแถบ">
+      <div class="solution-reading-head">
+        <span>อ่านค่าจากจุดปะ</span>
+        <strong>เทียบตำแหน่ง S บนไม้บรรทัด</strong>
+      </div>
+      <div class="solution-mini-graph" role="img" aria-label="กราฟย่อยแสดงระยะของแต่ละจุด">
+        <div class="solution-graph-axis"></div>
+        ${segments}
+        ${markers}
+      </div>
+      <div class="solution-point-table" role="table" aria-label="ตารางเวลาและระยะของจุดที่ใช้คำนวณ">
+        <div class="point-row point-row-head" role="row">
+          <span role="columnheader">จุด</span>
+          <span role="columnheader">ลำดับ</span>
+          <span role="columnheader">t</span>
+          <span role="columnheader">S</span>
+          <span role="columnheader">ระยะช่วง</span>
+        </div>
+        ${tableRows}
+      </div>
+    </section>
+  `;
+}
+
+function workedSolutionMarkup(title, bullets, equations, answer, note = '', reading = '') {
+  return `
+    <article class="worked-solution">
+      <h3>${title}</h3>
+      <p class="from-figure">จากรูป:</p>
+      <ul class="given-list">${bullets.map(item => `<li>${item}</li>`).join('')}</ul>
+      ${reading}
+      <div class="equation-work">${equations.map(line => `<div class="equation-line">${line}</div>`).join('')}</div>
+      <p class="final-answer">ดังนั้น <strong>${answer}</strong></p>
+      ${note ? `<p class="solution-note">${note}</p>` : ''}
+    </article>`;
+}
+
+function renderInstantaneousSolution(targetIndex) {
+  const target = state.points[targetIndex];
+  if (!target) return false;
+
+  const targetName = referenceName(targetIndex);
+  const local = localVelocity(targetIndex);
+  const deltaX = local.after.x - local.before.x;
+  const readingData = {
+    start: local.before,
+    end: local.after,
+    periods: local.intervals,
+    dt: local.dt
+  };
+  const beforeLabel = local.beforeIndex === targetIndex ? `จุด ${targetName}` : `จุดก่อน ${targetName}`;
+  const afterLabel = local.afterIndex === targetIndex ? `จุด ${targetName}` : `จุดหลัง ${targetName}`;
+  const bullets = [
+    `จุด ${targetName} (จุด ${targetIndex}) อยู่ที่ ${formatNumber(target.x)} cm`,
+    `${beforeLabel} (จุด ${local.beforeIndex}) อยู่ที่ ${formatNumber(local.before.x)} cm`,
+    `${afterLabel} (จุด ${local.afterIndex}) อยู่ที่ ${formatNumber(local.after.x)} cm`,
+    `เครื่องเคาะ 50 ครั้ง/วินาที → เวลาระหว่างจุด = ${fraction('1', '50')} s`,
+    `เวลาจากจุด ${local.beforeIndex} ถึง ${local.afterIndex} = ${fraction(local.intervals, '50')} s`
+  ];
+  const equations = [
+    `v<sub>${targetName}</sub> = ${fraction('S<sub>หลัง</sub> − S<sub>ก่อน</sub>', `${local.intervals}/50`)}`,
+    `= ${fraction(`${formatNumber(local.after.x)} − ${formatNumber(local.before.x)}`, `${local.intervals}/50`)}`,
+    `= ${fraction(formatNumber(deltaX), formatNumber(local.dt, 3))}`,
+    `= ${formatNumber(local.value)} cm/s`
+  ];
+
+  els.selectedPeriodBadge.textContent = `Δt = ${local.intervals}/50 s`;
+  els.solutionContent.innerHTML = workedSolutionMarkup(
+    `ข้อ: หาอัตราเร็วที่จุด ${targetName}`,
+    bullets,
+    equations,
+    `อัตราเร็วที่จุด ${targetName} = ${formatNumber(Math.abs(local.value))} cm/s`,
+    `ใช้จุดก่อนและจุดหลังประกบจุด ${targetName} เพื่อประมาณอัตราเร็ว ณ ขณะนั้น ถ้าอยู่ปลายแถบ ระบบจะใช้ช่วงข้างเดียว`,
+    solutionReadingMarkup(readingData, [local.beforeIndex, local.index, local.afterIndex])
+  );
+  return true;
+}
+
+function renderSolution() {
+  const data = selectionData();
+  if (state.solutionType === 'instantaneous') {
+    const selectedEnd = Number(els.endReference.value);
+    const targetIndex = data?.end.index ?? (state.selectedDots.includes(selectedEnd) ? selectedEnd : state.selectedDots[0]);
+    if (Number.isInteger(targetIndex) && renderInstantaneousSolution(targetIndex)) return;
+  }
+
+  if (!data) {
+    els.selectedPeriodBadge.textContent = 'Δt = — s';
+    const message = state.selectedDots.length === 1
+      ? '<strong>เลือกเพิ่มอีก 1 จุดสำหรับค่าเฉลี่ย</strong><p>ถ้าต้องการจุดเดียว ให้ใช้แท็บอัตราเร็ว ณ จุด</p>'
+      : '<strong>เลือกจุดบนกระดาษ 1 จุดขึ้นไป</strong><p>จุดเดียวใช้หาอัตราเร็ว ณ จุดได้ ส่วนค่าเฉลี่ยต้องเลือก 2 จุด</p>';
+    els.solutionContent.innerHTML = `<div class="solution-empty">${message}</div>`;
     return;
   }
-  const [a, b] = [...state.selectedDots].sort((x, y) => x - y);
-  const p1 = state.points[a];
-  const p2 = state.points[b];
-  const ds = Math.abs(p2.x - p1.x);
-  const dt = Math.abs(p2.t - p1.t);
-  const v = ds / Math.max(dt, 0.0001);
-  els.measureResult.innerHTML = `จุด ${a} → ${b}<br>Δs = ${ds.toFixed(2)} cm<br>Δt = ${dt.toFixed(3)} s<br>v̄ = ${v.toFixed(2)} cm/s`;
-}
 
-function clearMeasurement() {
-  state.selectedDots = [];
-  renderTape();
-  updateMeasureResult();
-}
+  els.selectedPeriodBadge.textContent = `Δt = ${data.periods}/50 s`;
+  const startName = referenceName(data.start.index);
+  const endName = referenceName(data.end.index);
+  const selectedReading = solutionReadingMarkup(data);
+  const commonBullets = [
+    `จุด ${startName} อยู่ที่ S<sub>${startName}</sub> = ${formatNumber(data.start.x)} cm`,
+    `จุด ${endName} อยู่ที่ S<sub>${endName}</sub> = ${formatNumber(data.end.x)} cm`,
+    `เครื่องเคาะ 50 ครั้ง/วินาที → เวลาระหว่างจุด = ${fraction('1', '50')} s`,
+    `จุด ${startName} ถึง ${endName} มี ${data.periods} ช่วง → Δt = ${fraction(data.periods, '50')} s = ${formatNumber(data.dt, 3)} s`
+  ];
 
-function downloadCsv() {
-  const headers = ['ช่วง', 'จุดเริ่ม', 'จุดจบ', 'เวลาเริ่ม(s)', 'เวลาจบ(s)', 'ระยะในช่วง(cm)', 'Δt(s)', 'vเฉลี่ย(cm/s)', 'aโดยประมาณ(cm/s^2)', 'ลักษณะจุด'];
-  const rows = state.groups.map(g => [
-    g.n,
-    g.start,
-    g.end,
-    g.t1.toFixed(3),
-    g.t2.toFixed(3),
-    g.ds.toFixed(2),
-    g.dt.toFixed(3),
-    g.vAvg.toFixed(2),
-    g.accApprox === null ? '' : g.accApprox.toFixed(2),
-    g.trend
-  ]);
-  const csv = [headers, ...rows].map(row => row.map(csvSafe).join(',')).join('\n');
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'ticker-timer-data.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function csvSafe(value) {
-  const text = String(value);
-  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-    return `"${text.replaceAll('"', '""')}"`;
+  if (state.solutionType === 'speed') {
+    const equations = [
+      `อัตราเร็วเฉลี่ย = ${fraction('S<sub>รวม</sub>', 'Δt')}`,
+      `= ${fraction(formatNumber(data.distance), `${data.periods}/50`)}`,
+      `= ${fraction(formatNumber(data.distance), formatNumber(data.dt, 3))}`,
+      `= ${formatNumber(data.avgSpeed)} cm/s`
+    ];
+    els.solutionContent.innerHTML = workedSolutionMarkup(
+      `ข้อ: หาอัตราเร็วเฉลี่ยระหว่างจุด ${startName}–${endName}`,
+      commonBullets,
+      equations,
+      `อัตราเร็วเฉลี่ย = ${formatNumber(data.avgSpeed)} cm/s`,
+      'อัตราเร็วใช้ระยะทางรวม จึงไม่มีเครื่องหมายบอกทิศทาง',
+      selectedReading
+    );
+  } else if (state.solutionType === 'velocity') {
+    const equations = [
+      `ΔS = S<sub>${endName}</sub> − S<sub>${startName}</sub> = ${formatNumber(data.end.x)} − ${formatNumber(data.start.x)} = ${formatNumber(data.displacement)} cm`,
+      `v̄ = ${fraction('ΔS', 'Δt')}`,
+      `= ${fraction(formatNumber(data.displacement), `${data.periods}/50`)}`,
+      `= ${formatNumber(data.avgVelocity)} cm/s`
+    ];
+    els.solutionContent.innerHTML = workedSolutionMarkup(
+      `ข้อ: หาความเร็วเฉลี่ยระหว่างจุด ${startName}–${endName}`,
+      commonBullets,
+      equations,
+      `ความเร็วเฉลี่ย = ${formatNumber(data.avgVelocity)} cm/s ${data.avgVelocity >= 0 ? 'ไปทางขวา' : 'ไปทางซ้าย'}`,
+      'ความเร็วเฉลี่ยใช้การกระจัด เครื่องหมายจึงใช้บอกทิศทาง',
+      selectedReading
+    );
+  } else if (state.solutionType === 'acceleration') {
+    const velocityA = localVelocity(data.start.index);
+    const velocityB = localVelocity(data.end.index);
+    const acceleration = (velocityB.value - velocityA.value) / data.dt;
+    const equations = [
+      `v<sub>${startName}</sub> = ${fraction(`${formatNumber(velocityA.after.x)} − ${formatNumber(velocityA.before.x)}`, `${velocityA.intervals}/50`)} = ${formatNumber(velocityA.value)} cm/s`,
+      `v<sub>${endName}</sub> = ${fraction(`${formatNumber(velocityB.after.x)} − ${formatNumber(velocityB.before.x)}`, `${velocityB.intervals}/50`)} = ${formatNumber(velocityB.value)} cm/s`,
+      `ā = ${fraction(`v<sub>${endName}</sub> − v<sub>${startName}</sub>`, `t<sub>${endName}</sub> − t<sub>${startName}</sub>`)}`,
+      `= ${fraction(`${formatNumber(velocityB.value)} − ${formatNumber(velocityA.value)}`, `${data.end.index}/50 − ${data.start.index}/50`)}`,
+      `= ${fraction(formatNumber(velocityB.value - velocityA.value), `${data.periods}/50`)} = ${formatNumber(acceleration)} cm/s²`
+    ];
+    els.solutionContent.innerHTML = workedSolutionMarkup(
+      `ข้อ: หาความเร่งเฉลี่ยระหว่างจุด ${startName}–${endName}`,
+      commonBullets,
+      equations,
+      `ความเร่งเฉลี่ย = ${formatNumber(acceleration)} cm/s²`,
+      state.source === 'manual' ? 'ข้อมูลจากการลากอาจแกว่งตามมือ ควรเลือกจุดห่างกันพอสมควรแล้วเทียบหลายช่วง' : 'เครื่องหมายลบหมายถึงความเร่งมีทิศตรงข้ามกับทิศบวก',
+      solutionReadingMarkup(data, [velocityA.beforeIndex, velocityA.index, velocityA.afterIndex, velocityB.beforeIndex, velocityB.index, velocityB.afterIndex])
+    );
+  } else {
+    const intervalAcceleration = data.avgAcceleration;
+    const predictedVelocity = data.start.v + intervalAcceleration * data.dt;
+    const predictedDisplacement = data.start.v * data.dt + 0.5 * intervalAcceleration * data.dt * data.dt;
+    const equations = [
+      `v = u + at`,
+      `= ${formatNumber(data.start.v)} + (${formatNumber(intervalAcceleration)})(${fraction(data.periods, '50')}) = ${formatNumber(predictedVelocity)} cm/s`,
+      `ΔS = ut + ${fraction('1', '2')}at²`,
+      `= (${formatNumber(data.start.v)})(${fraction(data.periods, '50')}) + ${fraction('1', '2')}(${formatNumber(intervalAcceleration)})(${fraction(data.periods, '50')})²`,
+      `= ${formatNumber(predictedDisplacement)} cm`
+    ];
+    els.solutionContent.innerHTML = workedSolutionMarkup(
+      'ข้อ: ตรวจคำตอบด้วยสมการการเคลื่อนที่',
+      [...commonBullets, `กำหนด u = ${formatNumber(data.start.v)} cm/s และ a = ${formatNumber(intervalAcceleration)} cm/s²`],
+      equations,
+      `ได้ ΔS = ${formatNumber(predictedDisplacement)} cm · จากแถบจริง ${formatNumber(data.displacement)} cm`,
+      state.source === 'manual' ? 'ใช้ได้เป็นค่าประมาณเมื่อการลากมีความเร่งใกล้คงที่ ถ้ามือเปลี่ยนแรงบ่อยให้เลือกช่วงสั้นลง' : 'สมการชุดนี้ใช้ได้ตรงเมื่อความเร่งคงที่ในช่วง A–B',
+      selectedReading
+    );
   }
-  return text;
 }
 
-function getAnswerMotionType(settings) {
-  if (settings.mode === 'custom') {
-    const hasPositive = settings.customSegments.some(segment => segment.a > 0);
-    const hasNegative = settings.customSegments.some(segment => segment.a < 0);
-    if (hasPositive && hasNegative) return 'mixed';
-    if (hasPositive) return 'accelerate';
-    if (hasNegative) return 'decelerate';
-    return 'constant';
+function drawGraph() {
+  if (!state.graphVisible || !state.points.length) return;
+  const canvas = els.chart;
+  const cssWidth = Math.max(280, canvas.clientWidth || 900);
+  const cssHeight = Math.max(260, Math.min(360, cssWidth * 0.42));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(cssWidth * dpr);
+  canvas.height = Math.round(cssHeight * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const paper = cssToken('--color-surface');
+  const ink = cssToken('--color-ink');
+  const muted = cssToken('--color-muted');
+  const rule = cssToken('--color-rule');
+  const accent = cssToken('--color-accent');
+  const selectA = cssToken('--color-selection-a');
+  const selectB = cssToken('--color-selection-b');
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = paper;
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  const pad = { left: 58, right: 18, top: 24, bottom: 48 };
+  const plotW = cssWidth - pad.left - pad.right;
+  const plotH = cssHeight - pad.top - pad.bottom;
+  const graphType = els.graphType.value;
+  const field = graphType === 'position' ? 'x' : graphType === 'velocity' ? 'v' : 'a';
+  const unit = graphType === 'position' ? 'S (cm)' : graphType === 'velocity' ? 'v (cm/s)' : 'a (cm/s²)';
+  const plottedPoints = state.source === 'auto' ? state.points.slice(0, state.currentIndex + 1) : state.points;
+  const values = plottedPoints.map(point => point[field]);
+  let minY = Math.min(...values, 0);
+  let maxY = Math.max(...values, 0);
+  if (Math.abs(maxY - minY) < 1e-9) {
+    minY -= 1;
+    maxY += 1;
   }
-  return Math.abs(settings.acc) < 0.001 ? 'constant' : (settings.acc > 0 ? 'accelerate' : 'decelerate');
+  const yPad = (maxY - minY) * 0.1;
+  minY -= yPad;
+  maxY += yPad;
+
+  const xAt = index => pad.left + (index / Math.max(1, state.points.length - 1)) * plotW;
+  const yAt = value => pad.top + ((maxY - value) / (maxY - minY)) * plotH;
+
+  ctx.strokeStyle = rule;
+  ctx.lineWidth = 1;
+  ctx.fillStyle = muted;
+  ctx.font = `12px ${cssToken('--font-body')}`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let tick = 0; tick <= 4; tick += 1) {
+    const y = pad.top + (tick / 4) * plotH;
+    const value = maxY - (tick / 4) * (maxY - minY);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(cssWidth - pad.right, y);
+    ctx.stroke();
+    ctx.fillText(formatNumber(value, 1), pad.left - 8, y);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const maxIndex = state.points.length - 1;
+  for (let tick = 0; tick <= 4; tick += 1) {
+    const index = Math.round((tick / 4) * maxIndex);
+    const x = xAt(index);
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + plotH);
+    ctx.stroke();
+    ctx.fillText(formatNumber(index / FREQUENCY, 2), x, pad.top + plotH + 8);
+  }
+
+  ctx.fillStyle = ink;
+  ctx.font = `600 13px ${cssToken('--font-body')}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(unit, pad.left, 2);
+  ctx.textAlign = 'center';
+  ctx.fillText('เวลา t (s)', pad.left + plotW / 2, cssHeight - 18);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad.left, pad.top, plotW, plotH);
+  ctx.clip();
+
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  plottedPoints.forEach(point => {
+    const x = xAt(point.index);
+    const y = yAt(point[field]);
+    if (point.index === plottedPoints[0].index) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  const markers = [
+    ...state.selectedDots.map((index, markerIndex) => ({ index, color: markerIndex % 2 === 0 ? selectA : selectB })),
+    { index: state.currentIndex, color: ink }
+  ];
+  markers.forEach(marker => {
+    if (!Number.isInteger(marker.index)) return;
+    const x = xAt(marker.index);
+    ctx.strokeStyle = marker.color;
+    ctx.lineWidth = marker.index === state.currentIndex ? 1 : 2;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + plotH);
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
-function answerTypeLabel(type) {
-  if (type === 'mixed') return 'มีทั้งเร่งขึ้นและลดลง';
-  if (type === 'constant') return 'ความเร็วคงที่';
-  if (type === 'accelerate') return 'มีความเร่ง / เร็วขึ้น';
-  return 'มีความหน่วง / ช้าลง';
+function animateStriker() {
+  if (motionQuery.matches || !els.striker.animate) return;
+  els.striker.animate(
+    [
+      { transform: 'translateX(-50%) translateY(-5px)' },
+      { transform: 'translateX(-50%) translateY(9px)', offset: 0.5 },
+      { transform: 'translateX(-50%) translateY(-5px)' }
+    ],
+    { duration: 1000 / FREQUENCY, easing: 'linear' }
+  );
 }
 
-function checkAnswers() {
-  const s = readSettings();
-  const last = state.points[state.points.length - 1];
-  const dtAnswer = Number(els.ansDt.value);
-  const distAnswer = Number(els.ansDistance.value);
-  const typeAnswer = els.ansType.value;
-  const trueDt = 1 / s.freq;
-  const trueDistance = last.x - state.points[0].x;
-  const trueType = getAnswerMotionType(s);
-
-  let score = 0;
-  const notes = [];
-
-  if (Math.abs(dtAnswer - trueDt) <= 0.002) score += 1;
-  else notes.push(`ข้อ 1 คำตอบที่ถูกคือประมาณ ${trueDt.toFixed(3)} s`);
-
-  if (Math.abs(distAnswer - trueDistance) <= Math.max(0.2, trueDistance * 0.03)) score += 1;
-  else notes.push(`ข้อ 2 คำตอบที่ถูกคือประมาณ ${trueDistance.toFixed(2)} cm`);
-
-  if (typeAnswer === trueType) score += 1;
-  else notes.push(`ข้อ 3 คำตอบที่ถูกคือ “${answerTypeLabel(trueType)}”`);
-
-  els.answerFeedback.className = `feedback ${score === 3 ? 'good' : 'bad'}`;
-  els.answerFeedback.innerHTML = score === 3
-    ? 'ยอดเยี่ยม! ถูกครบ 3 ข้อ'
-    : `ได้ ${score}/3 คะแนน<br>${notes.join('<br>')}`;
+function ensureAutomaticSource() {
+  if (state.source === 'manual') regenerateSimulation();
 }
 
-function resetDefaults() {
+function playSimulation() {
+  ensureAutomaticSource();
+  if (state.currentIndex >= state.points.length - 1) state.currentIndex = 0;
+  if (state.running) return;
+  state.running = true;
+  const interval = (1000 / FREQUENCY) / readSettings().playbackRate;
+  state.runTimer = window.setInterval(() => {
+    if (state.currentIndex >= state.points.length - 1) {
+      pauseSimulation();
+      renderFrame();
+      return;
+    }
+    state.currentIndex += 1;
+    animateStriker();
+    renderFrame();
+    keepCurrentDotVisible();
+  }, interval);
+  renderFrame();
+}
+
+function pauseSimulation() {
+  if (state.runTimer) window.clearInterval(state.runTimer);
+  state.runTimer = null;
+  state.running = false;
+  updateTransportState();
+  renderReadouts();
+}
+
+function stepSimulation() {
+  ensureAutomaticSource();
   pauseSimulation();
-  els.motionMode.value = 'accelerate';
-  els.v0.value = 25;
-  els.acc.value = 35;
-  els.freq.value = 50;
-  els.duration.value = 2.0;
-  els.groupSize.value = 5;
-  els.scale.value = 60;
-  els.customT1.value = 0.6;
-  els.customT2.value = 1.1;
-  els.customT3.value = 1.6;
-  els.customA1.value = 60;
-  els.customA2.value = 0;
-  els.customA3.value = -80;
-  els.customA4.value = 30;
+  if (state.currentIndex < state.points.length - 1) state.currentIndex += 1;
+  animateStriker();
+  renderFrame();
+  keepCurrentDotVisible();
+}
+
+function updateTransportState() {
+  els.playBtn.disabled = state.running || state.dragging;
+  els.pauseBtn.disabled = !state.running && !state.dragging;
+  els.stepBtn.disabled = state.running || state.dragging;
+}
+
+function keepCurrentDotVisible() {
+  const dot = els.tape.querySelector(`[data-index="${state.currentIndex}"]`);
+  dot?.scrollIntoView({ behavior: motionQuery.matches ? 'auto' : 'smooth', block: 'nearest', inline: 'center' });
+}
+
+function pointerToManualPosition(event) {
+  const rect = els.labStage.getBoundingClientRect();
+  const cartWidth = els.cart.offsetWidth || 160;
+  const base = rect.width >= 640 ? 112 : 83;
+  const available = Math.max(20, rect.width - base - cartWidth - 24);
+  const center = event.clientX - state.dragPointerOffset - rect.left - base - cartWidth / 2;
+  return clamp((center / available) * 120, 0, 120);
+}
+
+function beginManualDrag(event) {
+  if (event.button !== 0 && event.pointerType !== 'touch') return;
+  pauseSimulation();
+  const startPoint = currentPoint();
+  const cartRect = els.cart.getBoundingClientRect();
+  state.dragPointerOffset = event.clientX - (cartRect.left + cartRect.width / 2);
+  state.dragging = true;
+  state.source = 'manual';
+  state.dragX = clamp(startPoint.x, 0, 120);
+  state.points = [{ index: 0, t: 0, x: state.dragX, v: 0, a: 0 }];
   state.currentIndex = 0;
   state.selectedDots = [];
-  els.ansDt.value = '';
-  els.ansDistance.value = '';
-  els.ansType.value = '';
-  els.answerFeedback.className = 'feedback';
-  els.answerFeedback.textContent = 'กรอกคำตอบแล้วกด “ตรวจคำตอบ”';
-  renderAll();
+  els.cart.classList.add('is-dragging');
+  els.cart.setPointerCapture?.(event.pointerId);
+  state.manualTimer = window.setInterval(recordManualTick, 1000 / FREQUENCY);
+  renderStatic();
+  renderFrame();
+  event.preventDefault();
 }
 
-function handleControlChange() {
+function moveManualDrag(event) {
+  if (!state.dragging) return;
+  state.dragX = pointerToManualPosition(event);
+  const point = currentPoint();
+  point.x = state.dragX;
+  recalculateManualKinematics();
+  renderFrame();
+  event.preventDefault();
+}
+
+function recordManualTick() {
+  if (!state.dragging || state.points.length > MAX_MANUAL_PERIODS) {
+    endManualDrag();
+    return;
+  }
+  const index = state.points.length;
+  state.points.push({ index, t: index * PERIOD, x: state.dragX, v: 0, a: 0 });
+  state.currentIndex = index;
+  recalculateManualKinematics();
+  animateStriker();
+  renderTape(els.tape, false);
+  renderFrame();
+}
+
+function endManualDrag(event) {
+  if (!state.dragging) return;
+  if (state.manualTimer) window.clearInterval(state.manualTimer);
+  state.manualTimer = null;
+  state.dragging = false;
+  els.cart.classList.remove('is-dragging');
+  if (event?.pointerId !== undefined) els.cart.releasePointerCapture?.(event.pointerId);
+  recalculateManualKinematics();
+  renderStatic();
+  renderFrame();
+}
+
+function recalculateManualKinematics() {
+  const points = state.points;
+  if (points.length < 2) return;
+  points.forEach((point, index) => {
+    const previous = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const dt = Math.max(PERIOD, next.t - previous.t);
+    point.v = (next.x - previous.x) / dt;
+  });
+  points.forEach((point, index) => {
+    const previous = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const dt = Math.max(PERIOD, next.t - previous.t);
+    point.a = (next.v - previous.v) / dt;
+  });
+}
+
+function recordKeyboardStep(direction) {
   pauseSimulation();
-  state.currentIndex = 0;
-  state.selectedDots = [];
-  renderAll();
+  if (state.source !== 'manual') {
+    const start = currentPoint();
+    state.source = 'manual';
+    state.points = [{ index: 0, t: 0, x: clamp(start.x, 0, 120), v: 0, a: 0 }];
+    state.selectedDots = [];
+  }
+  if (state.points.length > MAX_MANUAL_PERIODS) return;
+  const previous = state.points[state.points.length - 1];
+  const index = state.points.length;
+  state.points.push({ index, t: index * PERIOD, x: clamp(previous.x + direction * 2, 0, 120), v: 0, a: 0 });
+  state.currentIndex = index;
+  recalculateManualKinematics();
+  animateStriker();
+  renderStatic();
+  renderFrame();
 }
 
-let resizeTimer = null;
+function toggleGraph() {
+  state.graphVisible = !state.graphVisible;
+  els.graphPanel.classList.toggle('is-hidden', !state.graphVisible);
+  els.toggleGraphBtn.setAttribute('aria-expanded', String(state.graphVisible));
+  if (state.graphVisible) drawGraph();
+}
+
+function toggleSolution() {
+  state.solutionVisible = !state.solutionVisible;
+  els.solutionPanel.classList.toggle('is-hidden', !state.solutionVisible);
+  els.toggleSolutionBtn.setAttribute('aria-expanded', String(state.solutionVisible));
+  document.body.classList.toggle('solution-hidden', !state.solutionVisible);
+}
+
+function setPaperFit(fit) {
+  state.paperFit = fit;
+  els.fullTapeViewport.classList.toggle('fit-mode', fit);
+  els.fitPaperBtn.classList.toggle('is-active', fit);
+  els.actualPaperBtn.classList.toggle('is-active', !fit);
+  renderTape(els.fullTape, true);
+}
+
+function openPaperDialog() {
+  renderTape(els.fullTape, true);
+  els.paperDialogSummary.textContent = 'แถบกระดาษทั้งแผ่น · ไม้บรรทัดแบ่งละเอียดทุก 1 mm';
+  els.paperDialog.showModal();
+}
+
+function closeOnBackdrop(event) {
+  if (event.target === event.currentTarget) event.currentTarget.close();
+}
+
+function handleSolutionTab(event) {
+  const button = event.currentTarget;
+  state.solutionType = button.dataset.solution;
+  els.solutionTabs.forEach(tab => {
+    const active = tab === button;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  renderSolution();
+}
+
 function handleResize() {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    renderTape();
-    updateAnimationFrame();
+  window.clearTimeout(handleResize.timer);
+  handleResize.timer = window.setTimeout(() => {
+    renderTape(els.tape, false);
+    renderTape(els.fullTape, true);
+    renderStage();
+    drawGraph();
   }, 120);
 }
 
-function togglePanel() {
-  state.panelHidden = !state.panelHidden;
-  document.body.classList.toggle('panel-hidden', state.panelHidden);
-  els.togglePanelBtn.textContent = state.panelHidden ? 'แสดงแผง' : 'ซ่อนแผง';
-  els.togglePanelBtn.setAttribute('aria-pressed', String(state.panelHidden));
-  handleResize();
-}
-
-function toggleValues() {
-  state.valuesHidden = !state.valuesHidden;
-  document.body.classList.toggle('values-hidden', state.valuesHidden);
-  els.toggleValuesBtn.textContent = state.valuesHidden ? 'แสดงค่า' : 'ซ่อนค่า';
-  els.toggleValuesBtn.setAttribute('aria-pressed', String(state.valuesHidden));
-}
-
-function togglePeriod() {
-  state.periodHidden = !state.periodHidden;
-  document.body.classList.toggle('period-hidden', state.periodHidden);
-  els.togglePeriodBtn.textContent = state.periodHidden ? 'แสดงช่วง' : 'ซ่อนช่วง';
-  els.togglePeriodBtn.setAttribute('aria-pressed', String(state.periodHidden));
-}
-
-['input', 'change'].forEach(evt => {
-  [
-    els.v0,
-    els.acc,
-    els.freq,
-    els.duration,
-    els.groupSize,
-    els.scale,
-    els.motionMode,
-    els.customT1,
-    els.customT2,
-    els.customT3,
-    els.customA1,
-    els.customA2,
-    els.customA3,
-    els.customA4
-  ].forEach(el => {
-    el.addEventListener(evt, handleControlChange);
-  });
+els.playBtn.addEventListener('click', playSimulation);
+els.pauseBtn.addEventListener('click', () => {
+  if (state.dragging) endManualDrag();
+  else pauseSimulation();
+});
+els.stepBtn.addEventListener('click', stepSimulation);
+els.resetBtn.addEventListener('click', regenerateSimulation);
+els.clearSelectionBtn.addEventListener('click', clearSelection);
+els.toggleGraphBtn.addEventListener('click', toggleGraph);
+els.toggleSolutionBtn.addEventListener('click', toggleSolution);
+els.graphType.addEventListener('change', drawGraph);
+els.solutionTabs.forEach(tab => tab.addEventListener('click', handleSolutionTab));
+[els.tape, els.fullTape].forEach(tape => {
+  tape.addEventListener('click', handleTapeClick);
+  tape.addEventListener('pointermove', handleTapePointerMove);
+  tape.addEventListener('pointerleave', handleTapePointerLeave);
+});
+els.startReference.addEventListener('change', () => {
+  renderSolution();
+  drawGraph();
+});
+els.endReference.addEventListener('change', () => {
+  renderSolution();
+  drawGraph();
 });
 
-els.graphType.addEventListener('change', renderChart);
-function startFromControls() {
-  if (state.currentIndex >= state.points.length - 1) state.currentIndex = 0;
-  renderChart();
-  runSimulation();
-}
+els.openSettingsBtn.addEventListener('click', () => {
+  syncSettingsUi();
+  els.settingsDialog.showModal();
+  window.setTimeout(() => els.motionMode.focus(), 0);
+});
+els.motionMode.addEventListener('change', syncSettingsUi);
+els.v0.addEventListener('input', syncSettingsUi);
+els.acc.addEventListener('input', syncSettingsUi);
+els.duration.addEventListener('input', syncSettingsUi);
+els.applySettingsBtn.addEventListener('click', () => {
+  regenerateSimulation();
+  els.settingsDialog.close();
+});
+els.settingsDialog.addEventListener('click', closeOnBackdrop);
 
-els.runBtn.addEventListener('click', startFromControls);
-els.pauseBtn.addEventListener('click', pauseSimulation);
-els.stepBtn.addEventListener('click', stepSimulation);
-els.simRunBtn.addEventListener('click', startFromControls);
-els.simPauseBtn.addEventListener('click', pauseSimulation);
-els.simStepBtn.addEventListener('click', stepSimulation);
-els.resetBtn.addEventListener('click', resetDefaults);
-els.togglePanelBtn.addEventListener('click', togglePanel);
-els.toggleValuesBtn.addEventListener('click', toggleValues);
-els.togglePeriodBtn.addEventListener('click', togglePeriod);
-els.clearMeasureBtn.addEventListener('click', clearMeasurement);
-els.downloadCsvBtn.addEventListener('click', downloadCsv);
-els.checkAnswersBtn.addEventListener('click', checkAnswers);
+els.openPaperBtn.addEventListener('click', openPaperDialog);
+els.closePaperBtn.addEventListener('click', () => els.paperDialog.close());
+els.paperDialog.addEventListener('click', closeOnBackdrop);
+els.fitPaperBtn.addEventListener('click', () => setPaperFit(true));
+els.actualPaperBtn.addEventListener('click', () => setPaperFit(false));
+
+els.cart.addEventListener('pointerdown', beginManualDrag);
+els.labStage.addEventListener('pointermove', moveManualDrag);
+els.labStage.addEventListener('pointerup', endManualDrag);
+els.labStage.addEventListener('pointercancel', endManualDrag);
+els.cart.addEventListener('keydown', event => {
+  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+    event.preventDefault();
+    recordKeyboardStep(event.key === 'ArrowRight' ? 1 : -1);
+  }
+});
+
 window.addEventListener('resize', handleResize);
+window.addEventListener('beforeunload', () => {
+  pauseSimulation();
+  if (state.manualTimer) window.clearInterval(state.manualTimer);
+});
 
-renderAll();
+syncSettingsUi();
+regenerateSimulation();
