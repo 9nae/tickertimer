@@ -2,313 +2,263 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simulator เครื่องเคาะสัญญาณเวลา | การเคลื่อนที่แนวตรง</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>เครื่องเคาะสัญญาณเวลา 50 Hz | Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="hallmark.css" />
 </head>
 <body>
-  <button id="togglePanelBtn" class="panel-toggle" type="button" aria-pressed="false">ซ่อนแผง</button>
   <div class="app-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">ฟิสิกส์ ม.4 · การเคลื่อนที่แนวตรง</p>
-        <h1>Simulator เครื่องเคาะสัญญาณเวลา</h1>
-        <p class="subtitle">
-          ทดลองสร้างแถบกระดาษเคาะสัญญาณเวลา วิเคราะห์ระยะทาง เวลา อัตราเร็ว ความเร็ว และความเร่งจากจุดที่เกิดทุก ๆ 1/f วินาที
-        </p>
+    <header class="app-bar">
+      <div class="app-title">
+        <span class="app-mark" aria-hidden="true"></span>
+        <div>
+          <h1>เครื่องเคาะสัญญาณเวลา</h1>
+          <p>50 Hz · หนึ่งจุดทุก <strong>1/50 s</strong></p>
+        </div>
       </div>
-      <div class="hero-card">
-        <div class="small-label">ค่ามาตรฐานในห้องเรียน</div>
-        <strong>50 ครั้ง/วินาที</strong>
-        <span>เวลาระหว่างจุดติดกัน = 0.02 s</span>
+
+      <div class="app-actions" aria-label="เครื่องมือซิมูเลเตอร์">
+        <button id="toggleGraphBtn" class="icon-btn" type="button" aria-expanded="true" aria-controls="graphPanel" title="เปิดหรือปิดกราฟ">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 4 3 5-8" /></svg>
+          <span>กราฟ</span>
+        </button>
+        <button id="openPaperBtn" class="icon-btn" type="button" title="ดูแถบกระดาษทั้งแผ่น">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM8 10h.01M12 10h.01M16 10h.01M10 14h.01M14 14h.01" /></svg>
+          <span>กระดาษเต็ม</span>
+        </button>
+        <button id="toggleSolutionBtn" class="icon-btn" type="button" aria-expanded="true" aria-controls="solutionPanel" title="แสดงวิธีคิด">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2zM8 7h8M8 11h5" /></svg>
+          <span>วิธีคิด</span>
+        </button>
+        <button id="openSettingsBtn" class="icon-btn settings-btn" type="button" title="ตั้งค่าการทดลอง">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6v.08h-4V20a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1H3.9v-4H4a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6v-.08h4V4a1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.08.37.3.72.6 1h.08v4H20a1.7 1.7 0 0 0-.6 1z" /></svg>
+          <span class="sr-only">ตั้งค่า</span>
+        </button>
       </div>
     </header>
 
-    <main class="layout">
-      <section class="panel controls" aria-labelledby="control-title">
-        <div class="section-heading">
+    <main class="sim-layout">
+      <section class="simulator-panel" aria-labelledby="simulator-title">
+        <div class="panel-heading">
           <div>
-            <p class="eyebrow">ตั้งค่าการทดลอง</p>
-            <h2 id="control-title">แผงควบคุม</h2>
+            <h2 id="simulator-title">ลากรถ หรือปล่อยให้รถเคลื่อนที่</h2>
+            <p>ลากตัวรถเพื่อบันทึกการเคลื่อนที่จริงจากมือ หรือกดเล่นเพื่อใช้ค่าจากการตั้งค่า</p>
           </div>
-          <button id="resetBtn" class="btn ghost" type="button">รีเซ็ต</button>
+          <div id="motionStatus" class="status" role="status" aria-live="polite">พร้อมทดลอง</div>
         </div>
 
-        <label class="field">
-          <span>รูปแบบการเคลื่อนที่</span>
-          <select id="motionMode">
-            <option value="constant">ความเร็วคงที่</option>
-            <option value="accelerate" selected>ความเร็วเพิ่มขึ้น / มีความเร่ง</option>
-            <option value="decelerate">ความเร็วลดลง / มีความหน่วง</option>
-            <option value="custom">กำหนดเอง</option>
-          </select>
-        </label>
+        <div id="labStage" class="lab-stage" aria-label="พื้นที่ทดลองรถ เครื่องเคาะ และแถบกระดาษ">
+          <div class="ticker-machine" aria-label="เครื่องเคาะสัญญาณเวลา 50 เฮิรตซ์">
+            <div class="ticker-label">50 Hz</div>
+            <div class="ticker-coil" aria-hidden="true"></div>
+            <div id="striker" class="striker" aria-hidden="true">
+              <span class="striker-bar"></span>
+              <span class="striker-tip"></span>
+            </div>
+            <div class="paper-slot" aria-hidden="true"></div>
+          </div>
 
-        <div id="customProfile" class="custom-profile" aria-label="custom acceleration profile">
-          <div class="custom-profile-head">
-            <strong>โปรไฟล์กำหนดเอง</strong>
-            <span>ตั้งความเร่งแต่ละช่วงให้เพิ่มขึ้น คงที่ หรือลดลงได้ในรอบเดียว</span>
+          <div class="paper-path" aria-hidden="true">
+            <div id="paperTail" class="paper-tail"></div>
           </div>
-          <div class="profile-row">
-            <label>
-              <span>ช่วง 1 สิ้นสุดที่เวลา (s)</span>
-              <input id="customT1" type="number" min="0.1" max="5" step="0.1" value="0.6" />
-            </label>
-            <label>
-              <span><span class="math-text">a₁</span> (cm/s²)</span>
-              <input id="customA1" type="number" min="-160" max="160" step="5" value="60" />
-            </label>
+
+          <div class="track" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
           </div>
-          <div class="profile-row">
-            <label>
-              <span>ช่วง 2 สิ้นสุดที่เวลา (s)</span>
-              <input id="customT2" type="number" min="0.2" max="5" step="0.1" value="1.1" />
-            </label>
-            <label>
-              <span><span class="math-text">a₂</span> (cm/s²)</span>
-              <input id="customA2" type="number" min="-160" max="160" step="5" value="0" />
-            </label>
-          </div>
-          <div class="profile-row">
-            <label>
-              <span>ช่วง 3 สิ้นสุดที่เวลา (s)</span>
-              <input id="customT3" type="number" min="0.3" max="5" step="0.1" value="1.6" />
-            </label>
-            <label>
-              <span><span class="math-text">a₃</span> (cm/s²)</span>
-              <input id="customA3" type="number" min="-160" max="160" step="5" value="-80" />
-            </label>
-          </div>
-          <div class="profile-row">
-            <div class="profile-end">ช่วง 4 ถึงเวลาสิ้นสุดการทดลอง</div>
-            <label>
-              <span><span class="math-text">a₄</span> (cm/s²)</span>
-              <input id="customA4" type="number" min="-160" max="160" step="5" value="30" />
-            </label>
-          </div>
+
+          <button id="cart" class="cart" type="button" aria-label="รถทดลอง ลากซ้ายขวาเพื่อบันทึกจุด หรือใช้ปุ่มลูกศรบนแป้นพิมพ์">
+            <span class="cart-shell" aria-hidden="true">
+              <span class="cart-top"></span>
+              <span class="cart-body-shape"></span>
+              <span class="cart-bumper cart-bumper-left"></span>
+              <span class="cart-bumper cart-bumper-right"></span>
+              <span class="cart-wheel cart-wheel-left"></span>
+              <span class="cart-wheel cart-wheel-right"></span>
+            </span>
+            <span class="drag-hint">ลากรถ</span>
+          </button>
         </div>
 
-        <div class="grid-2">
-          <label class="field">
-            <span>ความเร็วต้น <span class="math-text">v₀ (cm/s)</span></span>
-            <input id="v0" type="range" min="0" max="120" step="1" value="25" />
-            <output id="v0Out">25</output>
-          </label>
-          <label class="field">
-            <span>ความเร่ง <span class="math-text">a (cm/s²)</span></span>
-            <input id="acc" type="range" min="-120" max="120" step="1" value="35" />
-            <output id="accOut">35</output>
-          </label>
+        <div class="transport" aria-label="ควบคุมการทดลอง">
+          <button id="playBtn" class="control-btn primary" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
+            <span>เล่น</span>
+          </button>
+          <button id="pauseBtn" class="control-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+            <span>หยุด</span>
+          </button>
+          <button id="stepBtn" class="control-btn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 10 7-10 7zM19 5v14" /></svg>
+            <span>ทีละ 1/50 s</span>
+          </button>
+          <button id="resetBtn" class="control-btn quiet" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>
+            <span>เริ่มใหม่</span>
+          </button>
+          <p class="transport-note">เคาะทุก <strong>1/50 วินาที</strong> · เลือกจุดอ้างอิงได้หลายจุด แล้วกำหนดคู่ที่ต้องการคำนวณ</p>
         </div>
 
-        <div class="grid-2">
-          <label class="field">
-            <span>ความถี่เครื่องเคาะ f (Hz)</span>
-            <input id="freq" type="number" min="10" max="100" step="1" value="50" />
-          </label>
-          <label class="field">
-            <span>เวลาทดลองทั้งหมด (s)</span>
-            <input id="duration" type="number" min="0.4" max="5" step="0.1" value="2.0" />
-          </label>
-        </div>
-
-        <div class="grid-2">
-          <label class="field">
-            <span>จัดกลุ่มทุกกี่จุด</span>
-            <input id="groupSize" type="number" min="2" max="10" step="1" value="5" />
-          </label>
-          <label class="field">
-            <span>สเกลภาพ (px/cm)</span>
-            <input id="scale" type="number" min="40" max="100" step="1" value="60" />
-          </label>
-        </div>
-
-        <div class="button-row">
-          <button id="runBtn" class="btn primary" type="button">เริ่มจำลอง</button>
-          <button id="pauseBtn" class="btn" type="button">หยุดชั่วคราว</button>
-          <button id="stepBtn" class="btn" type="button">เดินทีละจุด</button>
-        </div>
-
-        <div class="formula-box">
-          <h3>สูตรที่ใช้ในซิมูเลเตอร์</h3>
-          <div class="formula-row">
-            <span>ตำแหน่ง</span>
-            <math display="block">
-              <mi>s</mi><mo>=</mo><msub><mi>v</mi><mn>0</mn></msub><mi>t</mi><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>a</mi><msup><mi>t</mi><mn>2</mn></msup>
-            </math>
+        <div class="tape-section">
+          <div class="tape-heading">
+            <div>
+              <h3>แถบกระดาษ</h3>
+              <p id="selectionSummary">เลือกจุดอ้างอิงบนแถบได้หลายจุด ระบบจะกำกับ A, B, C… จากซ้ายไปขวา</p>
+            </div>
+            <button id="clearSelectionBtn" class="text-btn" type="button">ล้างจุดที่เลือก</button>
           </div>
-          <div class="formula-row">
-            <span>ความเร็ว</span>
-            <math display="block">
-              <mi>v</mi><mo>=</mo><msub><mi>v</mi><mn>0</mn></msub><mo>+</mo><mi>a</mi><mi>t</mi>
-            </math>
+          <div id="tapeViewport" class="tape-viewport">
+            <div id="tapeSheet" class="tape-sheet">
+              <div id="tapeRuler" class="tape-ruler" aria-label="ไม้บรรทัดหน่วยเซนติเมตร"></div>
+              <div id="tape" class="ticker-tape" role="group" aria-label="จุดบนแถบกระดาษ"></div>
+            </div>
           </div>
-          <div class="formula-row">
-            <span>เวลาระหว่างจุด</span>
-            <math display="block">
-              <mi>&Delta;</mi><mi>t</mi><mo>=</mo><mfrac><mn>1</mn><mi>f</mi></mfrac>
-            </math>
+          <div class="tape-legend" aria-hidden="true">
+            <span><i class="legend-dot"></i> จุดทุก 1/50 s</span>
+            <span><i class="legend-reference"></i> จุดอ้างอิงที่เลือก</span>
+            <span><i class="legend-guide"></i> เส้นประเทียบไม้บรรทัด</span>
           </div>
         </div>
       </section>
 
-      <section class="panel simulator" aria-labelledby="sim-title">
-        <div class="section-heading">
+      <aside id="solutionPanel" class="solution-panel" aria-labelledby="solution-title">
+        <div class="solution-heading">
           <div>
-            <p class="eyebrow">ทดลองเสมือนจริง</p>
-            <h2 id="sim-title">แถบกระดาษเครื่องเคาะสัญญาณเวลา</h2>
+            <h2 id="solution-title">วิธีคิดจากจุดที่เลือก</h2>
+            <p>แสดงข้อมูล → สมการ → แทนค่า → คำตอบ</p>
           </div>
-          <div class="sim-actions">
-            <button id="toggleValuesBtn" class="btn ghost" type="button" aria-pressed="false">ซ่อนค่า</button>
-            <button id="togglePeriodBtn" class="btn ghost" type="button" aria-pressed="false">ซ่อนช่วง</button>
-            <div class="status-pill" id="motionStatus">พร้อมทดลอง</div>
-          </div>
+          <span id="selectedPeriodBadge" class="period-badge">Δt = — s</span>
         </div>
 
-        <div class="lab-scene">
-          <div class="ticker-machine">
-            <div class="machine-top">Ticker Timer</div>
-            <div class="needle" id="needle"></div>
-            <div class="carbon-paper">กระดาษคาร์บอน</div>
+        <div class="solution-tabs" role="tablist" aria-label="เลือกสิ่งที่ต้องการหา">
+          <button class="solution-tab is-active" type="button" role="tab" aria-selected="true" data-solution="instantaneous">อัตราเร็ว ณ จุด</button>
+          <button class="solution-tab" type="button" role="tab" aria-selected="false" data-solution="speed">อัตราเร็วเฉลี่ย</button>
+          <button class="solution-tab" type="button" role="tab" aria-selected="false" data-solution="velocity">ความเร็วเฉลี่ย</button>
+          <button class="solution-tab" type="button" role="tab" aria-selected="false" data-solution="acceleration">ความเร่งเฉลี่ย</button>
+          <button class="solution-tab" type="button" role="tab" aria-selected="false" data-solution="kinematics">สมการการเคลื่อนที่</button>
+        </div>
+
+        <div class="reference-picker" aria-label="เลือกคู่จุดสำหรับคำนวณ">
+          <label>
+            <span>จุดเริ่ม</span>
+            <select id="startReference" disabled><option value="">เลือกจุด</option></select>
+          </label>
+          <label>
+            <span>จุดปลาย</span>
+            <select id="endReference" disabled><option value="">เลือกจุด</option></select>
+          </label>
+        </div>
+
+        <div id="solutionContent" class="solution-content" aria-live="polite">
+          <div class="solution-empty">
+            <strong>เลือกจุดบนกระดาษ 2 จุด</strong>
+            <p>ระบบจะจัดลำดับวิธีทำและตรวจหน่วยให้ครบ</p>
           </div>
-          <div class="cart" id="cart">
-            <div class="cart-body">รถทดลอง</div>
-            <div class="wheel left"></div>
-            <div class="wheel right"></div>
-          </div>
-          <div class="track-line"></div>
         </div>
+      </aside>
 
-        <div class="sim-playbar" aria-label="ควบคุมการจำลอง">
-          <button id="simRunBtn" class="btn primary" type="button">เล่น</button>
-          <button id="simPauseBtn" class="btn" type="button">หยุด</button>
-          <button id="simStepBtn" class="btn" type="button">ทีละจุด</button>
-        </div>
-
-        <div class="tape-wrap">
-          <div class="ruler" id="ruler"></div>
-          <div class="tape" id="tape" role="img" aria-label="แถบกระดาษแสดงจุดจากเครื่องเคาะสัญญาณเวลา"></div>
-        </div>
-
-        <div class="measure-panel">
+      <section id="graphPanel" class="graph-panel" aria-labelledby="graph-title">
+        <div class="graph-heading">
           <div>
-            <strong>โหมดวัดระยะ</strong>
-            <p>คลิกจุด 2 จุดบนแถบกระดาษ ระบบจะคำนวณ <span class="math-text">Δs</span>, <span class="math-text">Δt</span> และอัตราเร็วเฉลี่ยให้ทันที</p>
-          </div>
-          <button id="clearMeasureBtn" class="btn ghost" type="button">ล้างจุดที่เลือก</button>
-          <div class="measure-result math-text" id="measureResult">ยังไม่ได้เลือกจุด</div>
-        </div>
-      </section>
-
-      <section class="panel analysis" aria-labelledby="analysis-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">อ่านผลการทดลอง</p>
-            <h2 id="analysis-title">สรุปผลอัตโนมัติ</h2>
-          </div>
-        </div>
-        <div class="summary-grid">
-          <div class="summary-card">
-            <span>เวลาระหว่างจุด</span>
-            <strong id="dtSummary">0.020 s</strong>
-          </div>
-          <div class="summary-card">
-            <span>จำนวนจุดทั้งหมด</span>
-            <strong id="dotSummary">101 จุด</strong>
-          </div>
-          <div class="summary-card">
-            <span>ระยะทางรวม</span>
-            <strong id="distanceSummary">120.00 cm</strong>
-          </div>
-          <div class="summary-card">
-            <span>อัตราเร็วเฉลี่ย</span>
-            <strong id="avgSpeedSummary" class="math-text">60.00 cm/s</strong>
-          </div>
-        </div>
-        <div class="interpretation" id="interpretation"></div>
-      </section>
-
-      <section class="panel graph-panel" aria-labelledby="graph-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">กราฟจากข้อมูลจำลอง</p>
             <h2 id="graph-title">กราฟการเคลื่อนที่</h2>
+            <p>เส้นตั้งสีส้มแสดงเวลาปัจจุบัน และเชื่อมกับจุดอ้างอิงที่เลือกบนกระดาษ</p>
           </div>
-          <select id="graphType" aria-label="เลือกกราฟ">
-            <option value="position">กราฟตำแหน่ง - เวลา (s-t)</option>
-            <option value="velocity">กราฟความเร็ว - เวลา (v-t)</option>
-            <option value="acceleration">กราฟความเร่ง - เวลา (a-t)</option>
-          </select>
+          <label class="select-field">
+            <span>ชนิดกราฟ</span>
+            <select id="graphType">
+              <option value="position">ระยะทาง–เวลา (S–t)</option>
+              <option value="velocity">ความเร็ว–เวลา (v–t)</option>
+              <option value="acceleration">ความเร่ง–เวลา (a–t)</option>
+            </select>
+          </label>
         </div>
-        <canvas id="chart" width="900" height="360"></canvas>
-      </section>
-
-      <section class="panel table-panel" aria-labelledby="table-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">ตารางวิเคราะห์</p>
-            <h2 id="table-title">ข้อมูลแบบจัดกลุ่มจุด</h2>
-          </div>
-          <button id="downloadCsvBtn" class="btn" type="button">ดาวน์โหลด CSV</button>
-        </div>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>ช่วง</th>
-                <th>จุดเริ่ม-จุดจบ</th>
-                <th>เวลาเริ่ม (s)</th>
-                <th>เวลาจบ (s)</th>
-                <th>ระยะในช่วง <span class="math-text">Δs (cm)</span></th>
-                <th><span class="math-text">Δt (s)</span></th>
-                <th><span class="math-text">v</span> เฉลี่ยช่วง <span class="math-text">(cm/s)</span></th>
-                <th><span class="math-text">a</span> โดยประมาณ <span class="math-text">(cm/s²)</span></th>
-                <th>ลักษณะจุด</th>
-              </tr>
-            </thead>
-            <tbody id="dataBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel practice" aria-labelledby="practice-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">กิจกรรมในชั้นเรียน</p>
-            <h2 id="practice-title">ใบงานสั้นในซิมูเลเตอร์</h2>
-          </div>
-          <button id="checkAnswersBtn" class="btn primary" type="button">ตรวจคำตอบ</button>
-        </div>
-        <div class="practice-grid">
-          <div class="question-card">
-            <label>
-              1) ถ้าเครื่องเคาะทำงานที่ <span id="qFreq">50</span> Hz เวลาระหว่างจุดติดกันเท่ากับกี่วินาที?
-              <input id="ansDt" type="number" step="0.001" placeholder="ตอบเป็นวินาที" />
-            </label>
-          </div>
-          <div class="question-card">
-            <label>
-              2) จากข้อมูลปัจจุบัน ระยะทางรวมของแถบกระดาษประมาณกี่เซนติเมตร?
-              <input id="ansDistance" type="number" step="0.01" placeholder="ตอบเป็น cm" />
-            </label>
-          </div>
-          <div class="question-card">
-            <label>
-              3) เมื่อตำแหน่งจุดห่างมากขึ้นเรื่อย ๆ แปลว่าวัตถุเคลื่อนที่แบบใด?
-              <select id="ansType">
-                <option value="">เลือกคำตอบ</option>
-                <option value="accelerate">มีความเร่ง / เร็วขึ้น</option>
-                <option value="constant">ความเร็วคงที่</option>
-                <option value="decelerate">มีความหน่วง / ช้าลง</option>
-                <option value="mixed">มีทั้งเร่งขึ้นและลดลง</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div id="answerFeedback" class="feedback">กรอกคำตอบแล้วกด “ตรวจคำตอบ”</div>
+        <canvas id="chart" width="1100" height="360" role="img" aria-label="กราฟการเคลื่อนที่"></canvas>
       </section>
     </main>
   </div>
+
+  <dialog id="settingsDialog" class="dialog settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="dialog-shell">
+      <div class="dialog-heading">
+        <div>
+          <h2 id="settings-title">ตั้งค่าการทดลอง</h2>
+          <p>เครื่องเคาะคงที่ 50 Hz จึงไม่ต้องตั้งค่าความถี่</p>
+        </div>
+        <button class="dialog-close" value="cancel" aria-label="ปิดหน้าต่างตั้งค่า">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div class="settings-grid">
+        <label class="field full-field">
+          <span>รูปแบบการเคลื่อนที่</span>
+          <select id="motionMode">
+            <option value="constant">ความเร็วคงที่</option>
+            <option value="accelerate" selected>เร็วขึ้น</option>
+            <option value="decelerate">ช้าลงจนหยุด</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>ความเร็วต้น <output id="v0Out">20 cm/s</output></span>
+          <input id="v0" type="range" min="0" max="120" step="1" value="20" />
+        </label>
+
+        <label class="field">
+          <span>ขนาดความเร่ง <output id="accOut">35 cm/s²</output></span>
+          <input id="acc" type="range" min="0" max="120" step="1" value="35" />
+        </label>
+
+        <label class="field">
+          <span>ระยะเวลาทดลอง</span>
+          <input id="duration" type="number" min="0.4" max="5" step="0.1" value="2.0" />
+          <small>2.000 s · ได้ 101 จุด</small>
+        </label>
+
+        <label class="field">
+          <span>ความเร็วการเล่น</span>
+          <select id="playbackRate">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1× เวลาจริง</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="applySettingsBtn" class="control-btn primary" value="default" type="button">ใช้ค่าและเริ่มใหม่</button>
+        <button class="control-btn" value="cancel">ปิด</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="paperDialog" class="dialog paper-dialog" aria-labelledby="paper-title">
+    <div class="dialog-shell paper-dialog-shell">
+      <div class="dialog-heading">
+        <div>
+          <h2 id="paper-title">แถบกระดาษทั้งแผ่น</h2>
+          <p id="paperDialogSummary">จุดทุกจุดห่างกันด้านเวลาเท่ากับ 1/50 s</p>
+        </div>
+        <button id="closePaperBtn" class="dialog-close" type="button" aria-label="ปิดแถบกระดาษเต็มแผ่น">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div class="paper-tools">
+        <button id="fitPaperBtn" class="control-btn is-active" type="button">พอดีหน้าจอ</button>
+        <button id="actualPaperBtn" class="control-btn" type="button">ขนาดวิเคราะห์</button>
+      </div>
+      <div id="fullTapeViewport" class="full-tape-viewport fit-mode">
+        <div id="fullTapeSheet" class="tape-sheet full-tape-sheet">
+          <div id="fullTapeRuler" class="tape-ruler" aria-label="ไม้บรรทัดหน่วยเซนติเมตร"></div>
+          <div id="fullTape" class="ticker-tape full-tape" role="group" aria-label="แถบกระดาษทั้งแผ่น"></div>
+        </div>
+      </div>
+      <p class="paper-help">กดจุดบนกระดาษเพื่อกำหนด A, B, C… ได้เหมือนแถบหลัก</p>
+    </div>
+  </dialog>
 
   <script src="script.js"></script>
 </body>
