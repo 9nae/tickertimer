@@ -30,10 +30,11 @@ const els = {
   startReference: document.getElementById('startReference'),
   endReference: document.getElementById('endReference'),
   solutionTabs: [...document.querySelectorAll('.solution-tab')],
-  graphPanel: document.getElementById('graphPanel'),
+  graphDialog: document.getElementById('graphDialog'),
   graphType: document.getElementById('graphType'),
   chart: document.getElementById('chart'),
   toggleGraphBtn: document.getElementById('toggleGraphBtn'),
+  closeGraphBtn: document.getElementById('closeGraphBtn'),
   toggleSolutionBtn: document.getElementById('toggleSolutionBtn'),
   openSettingsBtn: document.getElementById('openSettingsBtn'),
   settingsDialog: document.getElementById('settingsDialog'),
@@ -48,9 +49,7 @@ const els = {
   openPaperBtn: document.getElementById('openPaperBtn'),
   paperDialog: document.getElementById('paperDialog'),
   closePaperBtn: document.getElementById('closePaperBtn'),
-  paperDialogSummary: document.getElementById('paperDialogSummary'),
-  fitPaperBtn: document.getElementById('fitPaperBtn'),
-  actualPaperBtn: document.getElementById('actualPaperBtn')
+  paperDialogSummary: document.getElementById('paperDialogSummary')
 };
 
 const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -63,15 +62,25 @@ const state = {
   runTimer: null,
   source: 'auto',
   solutionType: 'instantaneous',
-  graphVisible: true,
   solutionVisible: true,
-  paperFit: true,
   dragging: false,
   dragX: 0,
   dragPointerOffset: 0,
   manualTimer: null,
-  hoveredDot: null
+  hoveredDot: null,
+  graphPointerIndex: null
 };
+
+let graphResizeFrame = 0;
+let graphGeometry = null;
+const graphResizeObserver = typeof ResizeObserver === 'function'
+  ? new ResizeObserver(() => {
+      if (!els.graphDialog.open) return;
+      window.cancelAnimationFrame(graphResizeFrame);
+      graphResizeFrame = window.requestAnimationFrame(drawGraph);
+    })
+  : null;
+graphResizeObserver?.observe(els.chart.parentElement);
 
 function clamp(value, min, max) {
   const number = Number(value);
@@ -206,18 +215,16 @@ function tapeLayout(container, fullPaper) {
   const viewport = fullPaper ? els.fullTapeViewport : els.tapeViewport;
   const parentWidth = viewport.clientWidth || 760;
   const maxX = maximumPosition();
-  const fit = fullPaper && state.paperFit;
   const domain = Math.max(1, Math.ceil(maxX));
-  const inset = fit ? 28 : 48;
+  const inset = 48;
   const fitScale = Math.max(1, (parentWidth - 2 - inset * 2) / domain);
   const shouldFitMainTape = !fullPaper && domain <= FIT_TO_VIEW_DOMAIN;
-  const scale = fit || shouldFitMainTape ? fitScale : Math.max(MIN_TAPE_SCALE, fitScale);
+  const scale = shouldFitMainTape ? fitScale : Math.max(MIN_TAPE_SCALE, fitScale);
   const width = Math.max(parentWidth - 2, domain * scale + inset * 2);
   const usable = Math.max(1, width - inset * 2);
   return {
     width,
     domain,
-    fit,
     scale,
     left(point) {
       return inset + (point.x / domain) * usable;
@@ -746,16 +753,73 @@ function renderSolution() {
   }
 }
 
+function niceTickStep(range, targetTicks) {
+  const roughStep = Math.max(Number.EPSILON, range / Math.max(1, targetTicks));
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+  return factor * magnitude;
+}
+
+function niceAxisScale(values, targetTicks) {
+  let dataMin = Math.min(...values, 0);
+  let dataMax = Math.max(...values, 0);
+  if (Math.abs(dataMax - dataMin) < 1e-9) {
+    const spread = Math.max(1, Math.abs(dataMax) * 0.2);
+    dataMin -= spread;
+    dataMax += spread;
+  }
+
+  const step = niceTickStep(dataMax - dataMin, targetTicks);
+  const min = Math.floor(dataMin / step) * step;
+  const max = Math.ceil(dataMax / step) * step;
+  const count = Math.max(1, Math.round((max - min) / step));
+  const ticks = Array.from({ length: count + 1 }, (_, index) => min + index * step);
+  return { min, max, step, ticks };
+}
+
+function axisTickDigits(step) {
+  if (step >= 1) return Number.isInteger(step) ? 0 : 1;
+  return Math.min(4, Math.max(1, Math.ceil(-Math.log10(step)) + 1));
+}
+
+function formatAxisTick(value, step) {
+  const digits = axisTickDigits(step);
+  const clean = Math.abs(value) < step / 1000 ? 0 : value;
+  return clean.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+}
+
+function roundedRectanglePath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function drawGraph() {
-  if (!state.graphVisible || !state.points.length) return;
+  if (!state.points.length || !els.graphDialog.open) return;
+
   const canvas = els.chart;
-  const cssWidth = Math.max(280, canvas.clientWidth || 900);
-  const cssHeight = Math.max(260, Math.min(360, cssWidth * 0.42));
+  const bounds = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(280, canvas.clientWidth || Math.round(bounds.width) || 900);
+  const cssHeight = Math.max(220, canvas.clientHeight || Math.round(bounds.height) || cssWidth * 0.5);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = Math.round(cssWidth * dpr);
-  canvas.height = Math.round(cssHeight * dpr);
+  const bitmapWidth = Math.round(cssWidth * dpr);
+  const bitmapHeight = Math.round(cssHeight * dpr);
+  if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
+    canvas.width = bitmapWidth;
+    canvas.height = bitmapHeight;
+  }
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const paper = cssToken('--color-surface');
   const ink = cssToken('--color-ink');
@@ -764,66 +828,80 @@ function drawGraph() {
   const accent = cssToken('--color-accent');
   const selectA = cssToken('--color-selection-a');
   const selectB = cssToken('--color-selection-b');
+  const fontBody = cssToken('--font-body');
+  const graphType = els.graphType.value;
+  const field = graphType === 'position' ? 'x' : graphType === 'velocity' ? 'v' : 'a';
+  const ySymbol = graphType === 'position' ? 'S' : graphType === 'velocity' ? 'v' : 'a';
+  const yUnit = graphType === 'position' ? 'cm' : graphType === 'velocity' ? 'cm/s' : 'cm/s²';
+  const unit = graphType === 'position' ? 'S (cm)' : graphType === 'velocity' ? 'v (cm/s)' : 'a (cm/s²)';
+  const plottedPoints = state.source === 'auto' ? state.points.slice(0, state.currentIndex + 1) : state.points;
+  const values = state.points.map(point => point[field]);
+  const yTargetTicks = clamp(Math.floor((cssHeight - 90) / 64), 4, 8);
+  const xTargetTicks = clamp(Math.floor((cssWidth - 90) / 100), 4, 10);
+  const yScale = niceAxisScale(values, yTargetTicks);
+  const maxTime = Math.max(PERIOD, state.points[state.points.length - 1].t);
+  const xScale = niceAxisScale([0, maxTime], xTargetTicks);
+  const labelFontSize = cssWidth < 560 ? 11 : 12;
+
+  ctx.font = `${labelFontSize}px ${fontBody}`;
+  const widestYLabel = Math.max(...yScale.ticks.map(value => ctx.measureText(formatAxisTick(value, yScale.step)).width));
+  const pad = {
+    left: Math.max(54, Math.ceil(widestYLabel) + 20),
+    right: cssWidth < 560 ? 14 : 24,
+    top: cssHeight < 360 ? 32 : 40,
+    bottom: cssHeight < 360 ? 46 : 54
+  };
+  const plotW = Math.max(1, cssWidth - pad.left - pad.right);
+  const plotH = Math.max(1, cssHeight - pad.top - pad.bottom);
+  const xAt = time => pad.left + ((time - xScale.min) / (xScale.max - xScale.min)) * plotW;
+  const yAt = value => pad.top + ((yScale.max - value) / (yScale.max - yScale.min)) * plotH;
+  graphGeometry = { cssWidth, cssHeight, pad, plotW, plotH, xScale };
+
   ctx.clearRect(0, 0, cssWidth, cssHeight);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-  const pad = { left: 58, right: 18, top: 24, bottom: 48 };
-  const plotW = cssWidth - pad.left - pad.right;
-  const plotH = cssHeight - pad.top - pad.bottom;
-  const graphType = els.graphType.value;
-  const field = graphType === 'position' ? 'x' : graphType === 'velocity' ? 'v' : 'a';
-  const unit = graphType === 'position' ? 'S (cm)' : graphType === 'velocity' ? 'v (cm/s)' : 'a (cm/s²)';
-  const plottedPoints = state.source === 'auto' ? state.points.slice(0, state.currentIndex + 1) : state.points;
-  const values = plottedPoints.map(point => point[field]);
-  let minY = Math.min(...values, 0);
-  let maxY = Math.max(...values, 0);
-  if (Math.abs(maxY - minY) < 1e-9) {
-    minY -= 1;
-    maxY += 1;
-  }
-  const yPad = (maxY - minY) * 0.1;
-  minY -= yPad;
-  maxY += yPad;
-
-  const xAt = index => pad.left + (index / Math.max(1, state.points.length - 1)) * plotW;
-  const yAt = value => pad.top + ((maxY - value) / (maxY - minY)) * plotH;
-
   ctx.strokeStyle = rule;
   ctx.lineWidth = 1;
   ctx.fillStyle = muted;
-  ctx.font = `12px ${cssToken('--font-body')}`;
+  ctx.font = `${labelFontSize}px ${fontBody}`;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  for (let tick = 0; tick <= 4; tick += 1) {
-    const y = pad.top + (tick / 4) * plotH;
-    const value = maxY - (tick / 4) * (maxY - minY);
+  yScale.ticks.forEach(value => {
+    const y = yAt(value);
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(cssWidth - pad.right, y);
     ctx.stroke();
-    ctx.fillText(formatNumber(value, 1), pad.left - 8, y);
-  }
+    ctx.fillText(formatAxisTick(value, yScale.step), pad.left - 8, y);
+  });
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  const maxIndex = state.points.length - 1;
-  for (let tick = 0; tick <= 4; tick += 1) {
-    const index = Math.round((tick / 4) * maxIndex);
-    const x = xAt(index);
+  xScale.ticks.forEach(value => {
+    const x = xAt(value);
     ctx.beginPath();
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, pad.top + plotH);
     ctx.stroke();
-    ctx.fillText(formatNumber(index / FREQUENCY, 2), x, pad.top + plotH + 8);
-  }
+    ctx.fillText(formatAxisTick(value, xScale.step), x, pad.top + plotH + 9);
+  });
+
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top);
+  ctx.lineTo(pad.left, pad.top + plotH);
+  ctx.lineTo(pad.left + plotW, pad.top + plotH);
+  ctx.stroke();
 
   ctx.fillStyle = ink;
-  ctx.font = `600 13px ${cssToken('--font-body')}`;
+  ctx.font = `600 ${cssWidth < 560 ? 12 : 13}px ${fontBody}`;
   ctx.textAlign = 'left';
-  ctx.fillText(unit, pad.left, 2);
+  ctx.textBaseline = 'top';
+  ctx.fillText(unit, pad.left, 8);
   ctx.textAlign = 'center';
-  ctx.fillText('เวลา t (s)', pad.left + plotW / 2, cssHeight - 18);
+  ctx.fillText('เวลา t (s)', pad.left + plotW / 2, cssHeight - 20);
 
   ctx.save();
   ctx.beginPath();
@@ -831,31 +909,172 @@ function drawGraph() {
   ctx.clip();
 
   ctx.strokeStyle = accent;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = cssWidth < 560 ? 2 : 2.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  plottedPoints.forEach(point => {
-    const x = xAt(point.index);
+  plottedPoints.forEach((point, index) => {
+    const x = xAt(point.t);
     const y = yAt(point[field]);
-    if (point.index === plottedPoints[0].index) ctx.moveTo(x, y);
+    if (index === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  const markers = [
-    ...state.selectedDots.map((index, markerIndex) => ({ index, color: markerIndex % 2 === 0 ? selectA : selectB })),
-    { index: state.currentIndex, color: ink }
-  ];
-  markers.forEach(marker => {
-    if (!Number.isInteger(marker.index)) return;
-    const x = xAt(marker.index);
+  const selectedMarkers = state.selectedDots.map((index, markerIndex) => ({
+    index,
+    label: referenceLabel(markerIndex),
+    color: markerIndex % 2 === 0 ? selectA : selectB
+  }));
+  selectedMarkers.forEach(marker => {
+    const point = state.points[marker.index];
+    if (!point) return;
+    const x = xAt(point.t);
+    const y = yAt(point[field]);
     ctx.strokeStyle = marker.color;
-    ctx.lineWidth = marker.index === state.currentIndex ? 1 : 2;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, pad.top + plotH);
     ctx.stroke();
+    ctx.fillStyle = marker.color;
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
   });
+
+  const activePoint = state.points[state.currentIndex];
+  if (activePoint) {
+    const activeX = xAt(activePoint.t);
+    const activeY = yAt(activePoint[field]);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(activeX, pad.top);
+    ctx.lineTo(activeX, pad.top + plotH);
+    ctx.stroke();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(activeX, activeY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
+
+  ctx.font = `700 ${labelFontSize}px ${fontBody}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  selectedMarkers.forEach((marker, markerIndex) => {
+    const point = state.points[marker.index];
+    if (!point) return;
+    const x = clamp(xAt(point.t), pad.left + 9, pad.left + plotW - 9);
+    ctx.fillStyle = marker.color;
+    ctx.fillText(marker.label, x, pad.top + 7 + (markerIndex % 2) * (labelFontSize + 3));
+  });
+
+  const maximumInspectionIndex = state.source === 'auto' ? state.currentIndex : state.points.length - 1;
+  const requestedInspectionIndex = Number.isInteger(state.graphPointerIndex)
+    ? state.graphPointerIndex
+    : state.currentIndex;
+  const inspectionIndex = clamp(requestedInspectionIndex, 0, maximumInspectionIndex);
+  const inspectionPoint = state.points[inspectionIndex];
+  if (inspectionPoint) {
+    const pointX = xAt(inspectionPoint.t);
+    const pointY = yAt(inspectionPoint[field]);
+    const referenceIndex = state.selectedDots.indexOf(inspectionIndex);
+    const referencePrefix = referenceIndex >= 0 ? `${referenceLabel(referenceIndex)} · ` : '';
+    const pairName = `${referencePrefix}(t, ${ySymbol})`;
+    const pairValue = `(${formatNumber(inspectionPoint.t)} s, ${formatNumber(inspectionPoint[field])} ${yUnit})`;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(pad.left, pad.top, plotW, plotH);
+    ctx.clip();
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pointY);
+    ctx.lineTo(pointX, pointY);
+    ctx.moveTo(pointX, pointY);
+    ctx.lineTo(pointX, pad.top + plotH);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = paper;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pointX, pointY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const tooltipFontSize = cssWidth < 560 ? 10 : 11;
+    const tooltipLineHeight = tooltipFontSize + 4;
+    const tooltipPaddingX = 8;
+    const tooltipPaddingY = 6;
+    ctx.font = `700 ${tooltipFontSize}px ${fontBody}`;
+    const tooltipTextWidth = Math.max(ctx.measureText(pairName).width, ctx.measureText(pairValue).width);
+    const tooltipWidth = tooltipTextWidth + tooltipPaddingX * 2;
+    const tooltipHeight = tooltipLineHeight * 2 + tooltipPaddingY * 2;
+    const plotRight = pad.left + plotW;
+    const plotBottom = pad.top + plotH;
+    let tooltipX = pointX + 12;
+    if (tooltipX + tooltipWidth > plotRight - 4) tooltipX = pointX - tooltipWidth - 12;
+    tooltipX = clamp(tooltipX, pad.left + 4, plotRight - tooltipWidth - 4);
+    let tooltipY = pointY - tooltipHeight - 12;
+    if (tooltipY < pad.top + 4) tooltipY = pointY + 12;
+    tooltipY = clamp(tooltipY, pad.top + 4, plotBottom - tooltipHeight - 4);
+
+    roundedRectanglePath(ctx, tooltipX, tooltipY, tooltipWidth, tooltipHeight, 7);
+    ctx.fillStyle = paper;
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(pairName, tooltipX + tooltipPaddingX, tooltipY + tooltipPaddingY);
+    ctx.font = `600 ${tooltipFontSize}px ${fontBody}`;
+    ctx.fillText(pairValue, tooltipX + tooltipPaddingX, tooltipY + tooltipPaddingY + tooltipLineHeight);
+
+    els.chart.setAttribute(
+      'aria-label',
+      `กราฟการเคลื่อนที่ คู่อันดับ ${pairName} เท่ากับ ${formatNumber(inspectionPoint.t)} วินาที และ ${formatNumber(inspectionPoint[field])} ${yUnit}`
+    );
+  }
+}
+
+function inspectGraphPoint(event) {
+  if (!graphGeometry || !state.points.length) return;
+  const rect = els.chart.getBoundingClientRect();
+  if (!rect.width) return;
+  const canvasX = ((event.clientX - rect.left) / rect.width) * graphGeometry.cssWidth;
+  const timeRatio = clamp((canvasX - graphGeometry.pad.left) / graphGeometry.plotW, 0, 1);
+  const targetTime = graphGeometry.xScale.min
+    + timeRatio * (graphGeometry.xScale.max - graphGeometry.xScale.min);
+  const availablePoints = state.source === 'auto'
+    ? state.points.slice(0, state.currentIndex + 1)
+    : state.points;
+  let nearestPoint = availablePoints[0];
+  let nearestDistance = Math.abs(nearestPoint.t - targetTime);
+  availablePoints.slice(1).forEach(point => {
+    const distance = Math.abs(point.t - targetTime);
+    if (distance < nearestDistance) {
+      nearestPoint = point;
+      nearestDistance = distance;
+    }
+  });
+  if (state.graphPointerIndex === nearestPoint.index) return;
+  state.graphPointerIndex = nearestPoint.index;
+  drawGraph();
+}
+
+function clearGraphInspection(event) {
+  if (event.pointerType === 'touch' || state.graphPointerIndex === null) return;
+  state.graphPointerIndex = null;
+  drawGraph();
 }
 
 function animateStriker() {
@@ -1023,11 +1242,12 @@ function recordKeyboardStep(direction) {
   renderFrame();
 }
 
-function toggleGraph() {
-  state.graphVisible = !state.graphVisible;
-  els.graphPanel.classList.toggle('is-hidden', !state.graphVisible);
-  els.toggleGraphBtn.setAttribute('aria-expanded', String(state.graphVisible));
-  if (state.graphVisible) drawGraph();
+function openGraphDialog() {
+  if (!els.graphDialog.open) els.graphDialog.showModal();
+  window.requestAnimationFrame(() => {
+    drawGraph();
+    els.graphType.focus({ preventScroll: true });
+  });
 }
 
 function toggleSolution() {
@@ -1037,18 +1257,13 @@ function toggleSolution() {
   document.body.classList.toggle('solution-hidden', !state.solutionVisible);
 }
 
-function setPaperFit(fit) {
-  state.paperFit = fit;
-  els.fullTapeViewport.classList.toggle('fit-mode', fit);
-  els.fitPaperBtn.classList.toggle('is-active', fit);
-  els.actualPaperBtn.classList.toggle('is-active', !fit);
-  renderTape(els.fullTape, true);
-}
-
 function openPaperDialog() {
-  renderTape(els.fullTape, true);
   els.paperDialogSummary.textContent = 'แถบกระดาษทั้งแผ่น · ไม้บรรทัดแบ่งละเอียดทุก 1 mm';
-  els.paperDialog.showModal();
+  if (!els.paperDialog.open) els.paperDialog.showModal();
+  window.requestAnimationFrame(() => {
+    renderTape(els.fullTape, true);
+    els.fullTapeViewport.scrollLeft = 0;
+  });
 }
 
 function closeOnBackdrop(event) {
@@ -1084,9 +1299,12 @@ els.pauseBtn.addEventListener('click', () => {
 els.stepBtn.addEventListener('click', stepSimulation);
 els.resetBtn.addEventListener('click', regenerateSimulation);
 els.clearSelectionBtn.addEventListener('click', clearSelection);
-els.toggleGraphBtn.addEventListener('click', toggleGraph);
+els.toggleGraphBtn.addEventListener('click', openGraphDialog);
 els.toggleSolutionBtn.addEventListener('click', toggleSolution);
 els.graphType.addEventListener('change', drawGraph);
+els.chart.addEventListener('pointerdown', inspectGraphPoint);
+els.chart.addEventListener('pointermove', inspectGraphPoint);
+els.chart.addEventListener('pointerleave', clearGraphInspection);
 els.solutionTabs.forEach(tab => tab.addEventListener('click', handleSolutionTab));
 [els.tape, els.fullTape].forEach(tape => {
   tape.addEventListener('click', handleTapeClick);
@@ -1100,6 +1318,15 @@ els.startReference.addEventListener('change', () => {
 els.endReference.addEventListener('change', () => {
   renderSolution();
   drawGraph();
+});
+
+els.closeGraphBtn.addEventListener('click', () => {
+  state.graphPointerIndex = null;
+  els.graphDialog.close();
+});
+els.graphDialog.addEventListener('click', closeOnBackdrop);
+els.graphDialog.addEventListener('close', () => {
+  state.graphPointerIndex = null;
 });
 
 els.openSettingsBtn.addEventListener('click', () => {
@@ -1120,8 +1347,6 @@ els.settingsDialog.addEventListener('click', closeOnBackdrop);
 els.openPaperBtn.addEventListener('click', openPaperDialog);
 els.closePaperBtn.addEventListener('click', () => els.paperDialog.close());
 els.paperDialog.addEventListener('click', closeOnBackdrop);
-els.fitPaperBtn.addEventListener('click', () => setPaperFit(true));
-els.actualPaperBtn.addEventListener('click', () => setPaperFit(false));
 
 els.cart.addEventListener('pointerdown', beginManualDrag);
 els.labStage.addEventListener('pointermove', moveManualDrag);
@@ -1138,6 +1363,7 @@ window.addEventListener('resize', handleResize);
 window.addEventListener('beforeunload', () => {
   pauseSimulation();
   if (state.manualTimer) window.clearInterval(state.manualTimer);
+  graphResizeObserver?.disconnect();
 });
 
 syncSettingsUi();

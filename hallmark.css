@@ -662,6 +662,7 @@ h3 {
 .full-tape-viewport {
   margin-block-start: var(--space-sm);
   overflow-x: auto;
+  overflow-y: hidden;
   overscroll-behavior-inline: contain;
   border: var(--rule-thin) solid var(--color-tape-rule);
   background: var(--color-paper-2);
@@ -1136,10 +1137,59 @@ canvas {
   background: var(--color-surface);
 }
 
+.dialog.graph-dialog {
+  width: min(calc(100% - var(--space-lg)), 90rem);
+  max-width: calc(100% - var(--space-lg));
+  height: min(90dvh, 54rem);
+  max-height: calc(100dvh - var(--space-lg));
+  overflow: hidden;
+}
+
+.graph-dialog-shell {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(18rem, 1fr);
+}
+
+.dialog-heading.graph-dialog-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem) auto;
+  align-items: center;
+}
+
+.graph-tools {
+  min-width: 0;
+}
+
+.graph-tools .select-field {
+  width: 100%;
+}
+
+.graph-canvas-frame {
+  min-width: 0;
+  min-height: 0;
+  margin: var(--space-md);
+  overflow: hidden;
+  border: var(--rule-thin) solid var(--color-rule);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.graph-dialog canvas {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+
 .dialog {
   position: fixed;
   inset: 0;
   width: min(calc(100% - var(--space-lg)), 42rem);
+  max-width: calc(100% - var(--space-lg));
   max-height: min(88dvh, 48rem);
   margin: auto;
   padding: 0;
@@ -1234,22 +1284,12 @@ input[type="range"] {
   padding-block-end: var(--space-md);
 }
 
-.paper-tools {
-  display: flex;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md) 0;
-}
-
 .full-tape-viewport {
   margin-inline: var(--space-md);
 }
 
-.full-tape-viewport.fit-mode {
-  overflow-x: hidden;
-}
-
 .full-tape {
-  height: 5.25rem;
+  height: 6.25rem;
 }
 
 .worked-solution h3 {
@@ -1561,6 +1601,97 @@ input[type="range"] {
 
   .solution-known {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 39.99rem) {
+  .dialog.graph-dialog {
+    width: calc(100% - var(--space-sm));
+    max-width: calc(100% - var(--space-sm));
+    height: fit-content;
+    max-height: calc(100dvh - var(--space-sm));
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .graph-dialog-shell {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+
+  .dialog-heading.graph-dialog-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: flex-start;
+  }
+
+  .graph-tools {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .graph-dialog-heading .dialog-close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .graph-canvas-frame {
+    margin: var(--space-sm);
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+  }
+
+  .graph-dialog canvas {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 64rem) and (max-height: 40rem) {
+  .dialog.graph-dialog {
+    width: calc(100% - var(--space-sm));
+    max-width: calc(100% - var(--space-sm));
+    height: fit-content;
+    max-height: calc(100dvh - var(--space-sm));
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .graph-dialog-shell {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto auto;
+  }
+
+  .dialog-heading.graph-dialog-heading {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem) auto;
+    align-items: center;
+    padding: var(--space-sm);
+  }
+
+  .graph-tools {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .graph-dialog-heading .dialog-close {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .graph-canvas-frame {
+    min-height: 0;
+    margin: var(--space-sm);
+    overflow: hidden;
+    aspect-ratio: 10 / 3;
+  }
+
+  .graph-dialog canvas {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

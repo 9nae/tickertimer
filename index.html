@@ -21,7 +21,7 @@
       </div>
 
       <div class="app-actions" aria-label="เครื่องมือซิมูเลเตอร์">
-        <button id="toggleGraphBtn" class="icon-btn" type="button" aria-expanded="true" aria-controls="graphPanel" title="เปิดหรือปิดกราฟ">
+        <button id="toggleGraphBtn" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="graphDialog" title="เปิดกราฟการเคลื่อนที่">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 4 3 5-8" /></svg>
           <span>กราฟ</span>
         </button>
@@ -160,12 +160,17 @@
         </div>
       </aside>
 
-      <section id="graphPanel" class="graph-panel" aria-labelledby="graph-title">
-        <div class="graph-heading">
-          <div>
-            <h2 id="graph-title">กราฟการเคลื่อนที่</h2>
-            <p>เส้นตั้งสีส้มแสดงเวลาปัจจุบัน และเชื่อมกับจุดอ้างอิงที่เลือกบนกระดาษ</p>
-          </div>
+    </main>
+  </div>
+
+  <dialog id="graphDialog" class="dialog graph-dialog" aria-labelledby="graph-title">
+    <div class="dialog-shell graph-dialog-shell">
+      <div class="dialog-heading graph-dialog-heading">
+        <div>
+          <h2 id="graph-title">กราฟการเคลื่อนที่</h2>
+          <p>เส้นตั้งสีส้มแสดงเวลาปัจจุบัน และเส้นอ้างอิงแสดงจุด A, B, C… ที่เลือกบนกระดาษ</p>
+        </div>
+        <div class="graph-tools">
           <label class="select-field">
             <span>ชนิดกราฟ</span>
             <select id="graphType">
@@ -175,10 +180,15 @@
             </select>
           </label>
         </div>
-        <canvas id="chart" width="1100" height="360" role="img" aria-label="กราฟการเคลื่อนที่"></canvas>
-      </section>
-    </main>
-  </div>
+        <button id="closeGraphBtn" class="dialog-close" type="button" aria-label="ปิดกราฟการเคลื่อนที่">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div class="graph-canvas-frame">
+        <canvas id="chart" width="1280" height="640" role="img" aria-label="กราฟการเคลื่อนที่"></canvas>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="settingsDialog" class="dialog settings-dialog" aria-labelledby="settings-title">
     <form method="dialog" class="dialog-shell">
@@ -246,11 +256,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
-      <div class="paper-tools">
-        <button id="fitPaperBtn" class="control-btn is-active" type="button">พอดีหน้าจอ</button>
-        <button id="actualPaperBtn" class="control-btn" type="button">ขนาดวิเคราะห์</button>
-      </div>
-      <div id="fullTapeViewport" class="full-tape-viewport fit-mode">
+      <div id="fullTapeViewport" class="full-tape-viewport">
         <div id="fullTapeSheet" class="tape-sheet full-tape-sheet">
           <div id="fullTapeRuler" class="tape-ruler" aria-label="ไม้บรรทัดหน่วยเซนติเมตร"></div>
           <div id="fullTape" class="ticker-tape full-tape" role="group" aria-label="แถบกระดาษทั้งแผ่น"></div>
